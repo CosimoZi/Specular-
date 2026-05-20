@@ -134,6 +134,23 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'page.substat.title': '圣遗物词条评估',
     'page.team.title': '配队总伤害',
     'page.uid.title': 'UID 一键导入',
+
+    'uid.hint': '输入你的 UID，从 Enka.Network 公开 API 拉取角色展柜并自动填入计算器。',
+    'uid.placeholder': '玩家 UID（9-10 位数字）',
+    'uid.fetch': '拉取',
+    'uid.loading': '请稍候…',
+    'uid.invalid': 'UID 应当是 9-10 位数字',
+    'uid.advRank': '冒险等阶',
+    'uid.worldLevel': '世界等级',
+    'uid.charactersDisplayed': '位角色已展示',
+    'uid.clickToCalc': '点击进入计算器（面板已自动填入）',
+    'uid.unmappedCharacter': '未识别角色 id',
+    'uid.privacyNote': '关于隐私 & 数据来源',
+    'uid.privacyDetail':
+      'Specular 仅在你点击「拉取」时从浏览器直接调用 enka.network 的公开 API，结果存到 localStorage（5 分钟过期）。我们不收集你的 UID 或任何账户数据。要展示角色，你需要在游戏里开启「角色展柜」。',
+
+    'build.manualBase': '手动覆盖面板',
+    'build.manualBaseHint': '从 UID 导入时自动开启 — 直接使用最终聚合的 ATK/HP/DEF。',
   },
   en: {
     'app.title': 'Specular',
@@ -263,5 +280,24 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'page.substat.title': 'Substat valuation',
     'page.team.title': 'Team DPS',
     'page.uid.title': 'UID import',
+
+    'uid.hint':
+      "Enter your UID; we'll fetch your character showcase from Enka.Network and pre-fill the calculator.",
+    'uid.placeholder': 'Player UID (9-10 digits)',
+    'uid.fetch': 'Fetch',
+    'uid.loading': 'Please wait…',
+    'uid.invalid': 'UID must be 9-10 digits',
+    'uid.advRank': 'Adv. Rank',
+    'uid.worldLevel': 'World Lvl',
+    'uid.charactersDisplayed': 'characters showcased',
+    'uid.clickToCalc': "Click to open calculator (build pre-filled)",
+    'uid.unmappedCharacter': 'Unmapped character id',
+    'uid.privacyNote': 'Privacy & data source',
+    'uid.privacyDetail':
+      "Specular calls enka.network's public API directly from your browser only when you click Fetch. The response is cached in localStorage for 5 minutes. We don't collect your UID or any account info. You need to enable the in-game Character Showcase for your characters to appear.",
+
+    'build.manualBase': 'Manual base override',
+    'build.manualBaseHint':
+      'Auto-enabled on UID import. Uses your final aggregated ATK/HP/DEF directly.',
   },
 }

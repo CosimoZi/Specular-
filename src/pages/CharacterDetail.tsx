@@ -23,6 +23,7 @@ import {
 } from '@/engine'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
+import { useImportedBuilds } from '@/store/imported-builds'
 
 interface BuildForm {
   // Character base
@@ -117,6 +118,7 @@ export default function CharacterDetail() {
   const [scalingOverride, setScalingOverride] = useState<
     Record<string, 'atk' | 'hp' | 'def' | 'em'>
   >({})
+  const importedBuild = useImportedBuilds((s) => (id ? s.get(id) : undefined))
 
   useEffect(() => {
     if (!id) return
@@ -126,6 +128,40 @@ export default function CharacterDetail() {
       .then(setMeta)
       .catch((e) => setLoadError(e.message))
   }, [id])
+
+  // When the user lands on this page from /uid import, pre-fill the form with
+  // their actual character build. Enka's fightPropMap gives FINAL stats with
+  // weapon + artifacts + ascension all baked in, so we treat them as the
+  // "base" and skip the ascension-stat bonus to avoid double-counting.
+  useEffect(() => {
+    if (!importedBuild) return
+    const b = importedBuild
+    const elem = idx ? normalizeElement(idx.element) : 'Physical'
+    const elemDmg = b.elementalDmg[elem] ?? 0
+    setForm((prev) => ({
+      ...prev,
+      charLevel: b.characterLevel,
+      ascensionStage: b.ascensionStage,
+      manualBase: true,
+      baseAtkOverride: b.finalAtk,
+      baseHpOverride: b.finalHp,
+      baseDefOverride: b.finalDef,
+      atkFlat: 0,
+      atkPct: 0,
+      hpFlat: 0,
+      hpPct: 0,
+      defFlat: 0,
+      defPct: 0,
+      em: b.em,
+      critRate: Math.max(b.critRate - 5, 0), // dict already adds 5% baseline
+      critDmg: Math.max(b.critDmg - 50, 0),
+      erBonus: Math.max(b.er - 100, 0),
+      elementBonus: elemDmg,
+      autoLvl: b.talentLevels.auto,
+      skillLvl: b.talentLevels.skill,
+      burstLvl: b.talentLevels.burst,
+    }))
+  }, [importedBuild, idx])
 
   // Auto-sync ascensionStage with charLevel unless user has manually changed it.
   // We keep a simple invariant: if level allows a higher stage, but stage hasn't
@@ -179,8 +215,9 @@ export default function CharacterDetail() {
         hpFlat: baseHp,
         defFlat: baseDef,
       },
-      // Ascension stat (e.g. +28.8% ATK at stage 6)
-      ascensionBonusBag,
+      // Ascension stat (e.g. +28.8% ATK at stage 6). Skipped in manualBase
+      // mode because imported finalAtk already has ascension baked in.
+      form.manualBase ? {} : ascensionBonusBag,
       // External bonuses (weapon + artifact main/sub + buffs aggregated by user)
       {
         atkFlat: form.atkFlat,
@@ -361,16 +398,36 @@ function BuildPanel({
             </option>
           ))}
         </select>
-        <p className="text-xs text-zinc-500 mt-2">
-          {t('player.autoBase')}: ATK <strong>{Math.round(autoBase.atk)}</strong> · HP <strong>{Math.round(autoBase.hp)}</strong> · DEF <strong>{Math.round(autoBase.def)}</strong>
-        </p>
-        {Object.keys(ascensionBonusBag).length > 0 && (
-          <p className="text-xs text-zinc-500 mt-1">
-            {t('player.ascensionBonus')}:{' '}
-            {Object.entries(ascensionBonusBag)
-              .map(([k, v]) => `${k}: ${typeof v === 'number' && v < 1 ? `${(v * 100).toFixed(1)}%` : v}`)
-              .join(', ')}
-          </p>
+        {!form.manualBase && (
+          <>
+            <p className="text-xs text-zinc-500 mt-2">
+              {t('player.autoBase')}: ATK <strong>{Math.round(autoBase.atk)}</strong> · HP <strong>{Math.round(autoBase.hp)}</strong> · DEF <strong>{Math.round(autoBase.def)}</strong>
+            </p>
+            {Object.keys(ascensionBonusBag).length > 0 && (
+              <p className="text-xs text-zinc-500 mt-1">
+                {t('player.ascensionBonus')}:{' '}
+                {Object.entries(ascensionBonusBag)
+                  .map(([k, v]) => `${k}: ${typeof v === 'number' && v < 1 ? `${(v * 100).toFixed(1)}%` : v}`)
+                  .join(', ')}
+              </p>
+            )}
+          </>
+        )}
+        <label className="flex items-center gap-2 text-xs mt-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.manualBase}
+            onChange={(e) => upd('manualBase', e.target.checked)}
+          />
+          <span>{t('build.manualBase')}</span>
+        </label>
+        {form.manualBase && (
+          <div className="mt-2 pl-5 space-y-0.5">
+            <NumberRow label="Base ATK" value={form.baseAtkOverride} step={50} onChange={(v) => upd('baseAtkOverride', v)} />
+            <NumberRow label="Base HP" value={form.baseHpOverride} step={500} onChange={(v) => upd('baseHpOverride', v)} />
+            <NumberRow label="Base DEF" value={form.baseDefOverride} step={50} onChange={(v) => upd('baseDefOverride', v)} />
+            <p className="text-[10px] text-zinc-500 mt-1">{t('build.manualBaseHint')}</p>
+          </div>
         )}
       </section>
       <section>
