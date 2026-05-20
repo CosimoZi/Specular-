@@ -40,4 +40,4 @@ pnpm test           # 跑伤害引擎单元测试
 
 ## License
 
-MIT (待加 LICENSE 文件)
+MIT — see [LICENSE](./LICENSE).
