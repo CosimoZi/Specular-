@@ -151,6 +151,23 @@ export const DICT: Record<Locale, Record<string, string>> = {
 
     'build.manualBase': '手动覆盖面板',
     'build.manualBaseHint': '从 UID 导入时自动开启 — 直接使用最终聚合的 ATK/HP/DEF。',
+
+    'substat.title': '副词条边际收益',
+    'substat.hint': '为当前 build 增加 1 颗满档副词条后总伤害的提升。横条越长收益越高。',
+    'substat.substat': '副词条',
+    'substat.bar': '相对收益',
+    'substat.absDelta': '绝对增幅',
+    'substat.pctDelta': '百分比',
+    'substat.critRate': '暴击率 (+3.89%)',
+    'substat.critDmg': '暴击伤害 (+7.77%)',
+    'substat.atkPct': '攻击力 % (+5.83%)',
+    'substat.hpPct': '生命值 % (+5.83%)',
+    'substat.defPct': '防御力 % (+7.29%)',
+    'substat.em': '元素精通 (+23.31)',
+    'substat.er': '充能效率 (+6.48%)',
+    'substat.atkFlat': '固定攻击 (+19.45)',
+    'substat.hpFlat': '固定生命 (+298.75)',
+    'substat.defFlat': '固定防御 (+23.15)',
   },
   en: {
     'app.title': 'Specular',
@@ -299,5 +316,23 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'build.manualBase': 'Manual base override',
     'build.manualBaseHint':
       'Auto-enabled on UID import. Uses your final aggregated ATK/HP/DEF directly.',
+
+    'substat.title': 'Substat marginal value',
+    'substat.hint':
+      'Total damage gain from adding one max-roll substat to the current build. Longer bar = bigger gain.',
+    'substat.substat': 'Substat',
+    'substat.bar': 'Relative gain',
+    'substat.absDelta': 'Abs Δ',
+    'substat.pctDelta': 'Δ %',
+    'substat.critRate': 'CR (+3.89%)',
+    'substat.critDmg': 'CD (+7.77%)',
+    'substat.atkPct': 'ATK % (+5.83%)',
+    'substat.hpPct': 'HP % (+5.83%)',
+    'substat.defPct': 'DEF % (+7.29%)',
+    'substat.em': 'EM (+23.31)',
+    'substat.er': 'ER (+6.48%)',
+    'substat.atkFlat': 'Flat ATK (+19.45)',
+    'substat.hpFlat': 'Flat HP (+298.75)',
+    'substat.defFlat': 'Flat DEF (+23.15)',
   },
 }

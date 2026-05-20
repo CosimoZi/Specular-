@@ -21,6 +21,11 @@ import {
   type Reaction,
   type StatBag,
 } from '@/engine'
+import {
+  ALL_SUBSTATS,
+  MAX_ROLL_VALUES,
+  type Substat,
+} from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
 import { useImportedBuilds } from '@/store/imported-builds'
@@ -104,6 +109,118 @@ function reactionFromPick(pick: ReactionPick): Reaction {
     case 'aggravate': return { kind: 'aggravate' }
     case 'spread': return { kind: 'spread' }
     default: return { kind: 'none' }
+  }
+}
+
+type ComputedRow = {
+  role: 'auto' | 'skill' | 'burst'
+  lvl: number
+  hit: ExtractedHit
+  multiplier: number
+  out: ReturnType<typeof calcDamage>
+}
+
+/** Run the full damage calc for a given form. Pure function so we can call it
+ *  many times for substat valuation. */
+function computeBuildRows(
+  form: BuildForm,
+  meta: CharacterMeta,
+  autoBase: { hp: number; atk: number; def: number },
+  ascensionBonusBag: StatBag,
+  element: DamageElement,
+  scalingOverride: Record<string, 'atk' | 'hp' | 'def' | 'em'>,
+): { rows: ComputedRow[]; finalStats: ReturnType<typeof aggregateStats> } {
+  const baseAtk = form.manualBase ? form.baseAtkOverride : autoBase.atk
+  const baseHp = form.manualBase ? form.baseHpOverride : autoBase.hp
+  const baseDef = form.manualBase ? form.baseDefOverride : autoBase.def
+  const reaction = reactionFromPick(form.reaction)
+
+  const stats = aggregateStats([
+    {
+      atkFlat: baseAtk,
+      hpFlat: baseHp,
+      defFlat: baseDef,
+    },
+    form.manualBase ? {} : ascensionBonusBag,
+    {
+      atkFlat: form.atkFlat,
+      atkPct: form.atkPct / 100,
+      hpFlat: form.hpFlat,
+      hpPct: form.hpPct / 100,
+      defFlat: form.defFlat,
+      defPct: form.defPct / 100,
+      em: form.em,
+      critRate: form.critRate / 100,
+      critDmg: form.critDmg / 100,
+      er: form.erBonus / 100,
+      pyroDmg: element === 'Pyro' ? form.elementBonus / 100 : 0,
+      hydroDmg: element === 'Hydro' ? form.elementBonus / 100 : 0,
+      cryoDmg: element === 'Cryo' ? form.elementBonus / 100 : 0,
+      electroDmg: element === 'Electro' ? form.elementBonus / 100 : 0,
+      anemoDmg: element === 'Anemo' ? form.elementBonus / 100 : 0,
+      geoDmg: element === 'Geo' ? form.elementBonus / 100 : 0,
+      dendroDmg: element === 'Dendro' ? form.elementBonus / 100 : 0,
+      physicalDmg: element === 'Physical' ? form.elementBonus / 100 : 0,
+    },
+  ])
+  const baseRes = form.enemyRes / 100
+  const attacker = { level: form.charLevel, stats }
+  const target = {
+    level: form.enemyLevel,
+    resistance: {
+      Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
+      Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
+    },
+    resReduction: {
+      Pyro: form.resReduction / 100, Hydro: form.resReduction / 100,
+      Cryo: form.resReduction / 100, Electro: form.resReduction / 100,
+      Anemo: form.resReduction / 100, Geo: form.resReduction / 100,
+      Dendro: form.resReduction / 100, Physical: form.resReduction / 100,
+    },
+    defReduction: form.defReduction / 100,
+  }
+
+  const rows: ComputedRow[] = []
+  const sections: Array<{ role: 'auto' | 'skill' | 'burst'; lvl: number }> = [
+    { role: 'auto', lvl: form.autoLvl },
+    { role: 'skill', lvl: form.skillLvl },
+    { role: 'burst', lvl: form.burstLvl },
+  ]
+  for (const { role, lvl } of sections) {
+    const tlt = meta.talents[role]
+    if (!tlt) continue
+    for (const hit of tlt.hits) {
+      const m = hitMultiplier(tlt, hit, lvl)
+      if (m == null) continue
+      const key = `${role}:${hit.paramIndex}:${hit.label}`
+      const scaling = scalingOverride[key] ?? hit.scaling
+      const out = calcDamage(
+        attacker,
+        target,
+        { label: hit.label, scaling, multiplier: m, element, hitType: hit.hitType },
+        reaction,
+      )
+      rows.push({ role, lvl, hit: { ...hit, scaling }, multiplier: m, out })
+    }
+  }
+  return { rows, finalStats: stats }
+}
+
+/** For a substat, return the form-field name and the value-delta corresponding
+ *  to one max roll. */
+function substatToFormDelta(substat: Substat): { field: keyof BuildForm; delta: number } {
+  const roll = MAX_ROLL_VALUES[substat]
+  switch (substat) {
+    case 'critRate': return { field: 'critRate', delta: roll * 100 }
+    case 'critDmg': return { field: 'critDmg', delta: roll * 100 }
+    case 'atkPct': return { field: 'atkPct', delta: roll * 100 }
+    case 'hpPct': return { field: 'hpPct', delta: roll * 100 }
+    case 'defPct': return { field: 'defPct', delta: roll * 100 }
+    case 'em': return { field: 'em', delta: roll }
+    case 'er': return { field: 'erBonus', delta: roll * 100 }
+    case 'atkFlat': return { field: 'atkFlat', delta: roll }
+    case 'hpFlat': return { field: 'hpFlat', delta: roll }
+    case 'defFlat': return { field: 'defFlat', delta: roll }
   }
 }
 
@@ -191,105 +308,35 @@ export default function CharacterDetail() {
     return computeAscensionBonus(meta, form.ascensionStage)
   }, [meta, form.ascensionStage])
 
-  // Compute final final stats by aggregating: char base + ascension bonus + form's
-  // flat/pct bonuses from weapon+artifact+buffs.
+  // Compute final stats by aggregating: char base + ascension bonus + form bonuses.
   const rows = useMemo(() => {
     if (!meta) {
-      return { rows: [] as Array<{
-        role: 'auto' | 'skill' | 'burst'
-        lvl: number
-        hit: ExtractedHit
-        multiplier: number
-        out: ReturnType<typeof calcDamage>
-      }>, finalStats: null as ReturnType<typeof aggregateStats> | null }
-    }
-    const baseAtk = form.manualBase ? form.baseAtkOverride : autoBase.atk
-    const baseHp = form.manualBase ? form.baseHpOverride : autoBase.hp
-    const baseDef = form.manualBase ? form.baseDefOverride : autoBase.def
-    const reaction = reactionFromPick(form.reaction)
-
-    const stats = aggregateStats([
-      {
-        // Character base (treated as flat — % bonuses are below)
-        atkFlat: baseAtk,
-        hpFlat: baseHp,
-        defFlat: baseDef,
-      },
-      // Ascension stat (e.g. +28.8% ATK at stage 6). Skipped in manualBase
-      // mode because imported finalAtk already has ascension baked in.
-      form.manualBase ? {} : ascensionBonusBag,
-      // External bonuses (weapon + artifact main/sub + buffs aggregated by user)
-      {
-        atkFlat: form.atkFlat,
-        atkPct: form.atkPct / 100,
-        hpFlat: form.hpFlat,
-        hpPct: form.hpPct / 100,
-        defFlat: form.defFlat,
-        defPct: form.defPct / 100,
-        em: form.em,
-        // critRate/critDmg/er baselines are already included in aggregateStats
-        critRate: form.critRate / 100,
-        critDmg: form.critDmg / 100,
-        er: form.erBonus / 100,
-        pyroDmg: element === 'Pyro' ? form.elementBonus / 100 : 0,
-        hydroDmg: element === 'Hydro' ? form.elementBonus / 100 : 0,
-        cryoDmg: element === 'Cryo' ? form.elementBonus / 100 : 0,
-        electroDmg: element === 'Electro' ? form.elementBonus / 100 : 0,
-        anemoDmg: element === 'Anemo' ? form.elementBonus / 100 : 0,
-        geoDmg: element === 'Geo' ? form.elementBonus / 100 : 0,
-        dendroDmg: element === 'Dendro' ? form.elementBonus / 100 : 0,
-        physicalDmg: element === 'Physical' ? form.elementBonus / 100 : 0,
-      },
-    ])
-    const baseRes = form.enemyRes / 100
-    const attacker = { level: form.charLevel, stats }
-    const target = {
-      level: form.enemyLevel,
-      resistance: {
-        Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
-        Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
-      },
-      resReduction: {
-        Pyro: form.resReduction / 100, Hydro: form.resReduction / 100,
-        Cryo: form.resReduction / 100, Electro: form.resReduction / 100,
-        Anemo: form.resReduction / 100, Geo: form.resReduction / 100,
-        Dendro: form.resReduction / 100, Physical: form.resReduction / 100,
-      },
-      defReduction: form.defReduction / 100,
-    }
-
-    const collect: Array<{
-      role: 'auto' | 'skill' | 'burst'
-      lvl: number
-      hit: ExtractedHit
-      multiplier: number
-      out: ReturnType<typeof calcDamage>
-    }> = []
-
-    const sections: Array<{ role: 'auto' | 'skill' | 'burst'; lvl: number }> = [
-      { role: 'auto', lvl: form.autoLvl },
-      { role: 'skill', lvl: form.skillLvl },
-      { role: 'burst', lvl: form.burstLvl },
-    ]
-    for (const { role, lvl } of sections) {
-      const tlt = meta.talents[role]
-      if (!tlt) continue
-      for (const hit of tlt.hits) {
-        const m = hitMultiplier(tlt, hit, lvl)
-        if (m == null) continue
-        const key = `${role}:${hit.paramIndex}:${hit.label}`
-        const scaling = scalingOverride[key] ?? hit.scaling
-        const out = calcDamage(
-          attacker,
-          target,
-          { label: hit.label, scaling, multiplier: m, element, hitType: hit.hitType },
-          reaction,
-        )
-        collect.push({ role, lvl, hit: { ...hit, scaling }, multiplier: m, out })
+      return {
+        rows: [] as ComputedRow[],
+        finalStats: null as ReturnType<typeof aggregateStats> | null,
       }
     }
-    return { rows: collect, finalStats: stats }
+    return computeBuildRows(form, meta, autoBase, ascensionBonusBag, element, scalingOverride)
   }, [meta, form, element, scalingOverride, autoBase, ascensionBonusBag])
+
+  // Substat marginal-value: for each substat type, add +1 max roll to the form
+  // and recompute total avg damage. Sort by delta.
+  const substatValues = useMemo(() => {
+    if (!meta) return []
+    const baselineTotal = rows.rows.reduce((acc, r) => acc + r.out.avg, 0)
+    if (baselineTotal === 0) return []
+    return ALL_SUBSTATS.map((s) => {
+      const { field, delta } = substatToFormDelta(s)
+      const perturbed = { ...form, [field]: (form[field] as number) + delta }
+      const r = computeBuildRows(perturbed, meta, autoBase, ascensionBonusBag, element, scalingOverride)
+      const newTotal = r.rows.reduce((acc, row) => acc + row.out.avg, 0)
+      return {
+        substat: s,
+        absoluteDelta: newTotal - baselineTotal,
+        pctDelta: ((newTotal - baselineTotal) / baselineTotal) * 100,
+      }
+    }).sort((a, b) => b.absoluteDelta - a.absoluteDelta)
+  }, [rows.rows, form, meta, autoBase, ascensionBonusBag, element, scalingOverride])
 
   if (!idx) {
     return (
@@ -349,13 +396,18 @@ export default function CharacterDetail() {
             ascensionBonusBag={ascensionBonusBag}
             t={t}
           />
-          <DamagePanel
-            meta={meta}
-            rows={rows.rows}
-            scalingOverride={scalingOverride}
-            setScalingOverride={setScalingOverride}
-            t={t}
-          />
+          <div className="space-y-6">
+            <DamagePanel
+              meta={meta}
+              rows={rows.rows}
+              scalingOverride={scalingOverride}
+              setScalingOverride={setScalingOverride}
+              t={t}
+            />
+            {substatValues.length > 0 && (
+              <SubstatPanel substatValues={substatValues} t={t} />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -607,5 +659,68 @@ function DamagePanel({
         <strong>{t('damage.noteEmphasis')}</strong>：{t('damage.note')}
       </p>
     </div>
+  )
+}
+
+function SubstatPanel({
+  substatValues,
+  t,
+}: {
+  substatValues: Array<{
+    substat: Substat
+    absoluteDelta: number
+    pctDelta: number
+  }>
+  t: (key: string, fallback?: string) => string
+}) {
+  const fmt = (n: number) => Math.round(n).toLocaleString()
+  const positive = substatValues.filter((s) => s.absoluteDelta > 0)
+  const maxDelta = positive[0]?.absoluteDelta ?? 1
+  return (
+    <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+      <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+        {t('substat.title')}
+      </h3>
+      <div className="px-4 py-2 text-xs text-zinc-500 border-b border-zinc-100 dark:border-zinc-800">
+        {t('substat.hint')}
+      </div>
+      <table className="w-full text-sm">
+        <thead className="text-xs text-zinc-500 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <tr>
+            <th className="text-left px-4 py-2 font-normal">{t('substat.substat')}</th>
+            <th className="text-left px-2 py-2 font-normal w-32">{t('substat.bar')}</th>
+            <th className="text-right px-2 py-2 font-normal">{t('substat.absDelta')}</th>
+            <th className="text-right px-4 py-2 font-normal">{t('substat.pctDelta')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {substatValues.map((s, i) => {
+            const width = s.absoluteDelta > 0 ? (s.absoluteDelta / maxDelta) * 100 : 0
+            const isPositive = s.absoluteDelta > 0
+            return (
+              <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="px-4 py-2">
+                  {t(`substat.${s.substat}`)}
+                </td>
+                <td className="px-2 py-2">
+                  <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
+                    <div
+                      className={`h-full ${isPositive ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-zinc-400'}`}
+                      style={{ width: `${width}%` }}
+                    />
+                  </div>
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums">
+                  {isPositive ? '+' : ''}{fmt(s.absoluteDelta)}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums text-zinc-500">
+                  {s.pctDelta >= 0 ? '+' : ''}{s.pctDelta.toFixed(2)}%
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </section>
   )
 }
