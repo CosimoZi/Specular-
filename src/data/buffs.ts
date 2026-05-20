@@ -206,6 +206,95 @@ export const BUFFS: BuffSpec[] = [
     bag: { atkPct: 0.3 },
     defaultOn: false,
   },
+
+  // 香菱 Xiangling — solid pyro sub-DPS, no team buff exists; skip
+  // 温迪 Venti
+  {
+    id: 'venti-q-res-shred',
+    sourceCharacterId: 10000022,
+    label: { zh: '温迪 Q · 风套 + 4pc 减抗', en: 'Venti Q · Viridescent 4pc RES Shred' },
+    description: {
+      zh: '若装备风套 4pc，温迪 Q 扩散反应触发后会对敌人减扩散元素 40% 抗性。这里只针对：火/水/冰/雷各 +40% 增伤近似。',
+      en: 'With Viridescent 4pc, Venti Q swirl shreds 40% RES of the swirled element. Approximated as +40% DMG for fire/water/cryo/electro.',
+    },
+    target: 'team',
+    bag: {
+      pyroDmg: 0.4, hydroDmg: 0.4, cryoDmg: 0.4, electroDmg: 0.4,
+    },
+    defaultOn: false,
+  },
+
+  // 砂糖 Sucrose
+  {
+    id: 'sucrose-em-share',
+    sourceCharacterId: 10000043,
+    label: { zh: '砂糖 A4 · 元素精通分享 +50', en: 'Sucrose A4 · EM Share' },
+    description: {
+      zh: '砂糖触发扩散反应后，队伍中扩散的元素角色获得砂糖元素精通 20% 的精通加成。典型砂糖 800 EM → +160 EM 全队。这里取 +200 近似。',
+      en: "After Sucrose triggers swirl, allies of the swirled element gain 20% of her EM. Typical 800 EM Sucrose → +160 EM team. Modeled as +200.",
+    },
+    target: 'team',
+    bag: { em: 200 },
+    defaultOn: false,
+  },
+
+  // 五郎 Gorou — geo team only, defense + DMG bonus
+  {
+    id: 'gorou-q-geo-dmg',
+    sourceCharacterId: 10000055,
+    label: { zh: '五郎 Q · 岩元素伤害（典型 +25%）', en: 'Gorou Q · Geo DMG (~+25%)' },
+    description: {
+      zh: '五郎 Q「犬坂吠吠方圆阵」按队伍岩元素角色数提供 +DEF% 与 +岩元素伤害。3 岩时典型 +25% 岩增伤 + +200 DEF。',
+      en: "Gorou Q's General's War Banner stacks DEF and Geo DMG based on Geo allies. 3-Geo team ≈ +25% Geo DMG + +200 DEF.",
+    },
+    target: 'team',
+    bag: { geoDmg: 0.25, defFlat: 200 },
+    defaultOn: false,
+  },
+
+  // 久岐忍 Kuki Shinobu — hyperbloom enabler, no team buff curated yet
+  // 闲云 Xianyun
+  {
+    id: 'xianyun-q-plunge-atk',
+    sourceCharacterId: 10000093,
+    label: { zh: '闲云 Q · 下落 ATK 加成', en: 'Xianyun Q · Plunge ATK' },
+    description: {
+      zh: '闲云元素爆发期间为下落攻击附加伤害（基于闲云攻击力）。这里以 +X% allDmg 近似（典型下落特化）+10%。',
+      en: "Xianyun Q boosts plunge damage based on her ATK. Approximated as +10% allDmg (plunge-focused teams).",
+    },
+    target: 'team',
+    bag: { allDmg: 0.1 },
+    defaultOn: false,
+  },
+
+  // 卡齐娜 Kachina
+  {
+    id: 'kachina-q-def',
+    sourceCharacterId: 10000100,
+    label: { zh: '卡齐娜 Q · 防御与岩相关 buff', en: 'Kachina Q · DEF / Geo' },
+    description: {
+      zh: '卡齐娜的钻头协同攻击附岩元素伤害。本人 buff 对队伍效果有限，C1+ 提供防御。这里取近似 +100 DEF。',
+      en: 'Kachina drill provides co-op geo hits; C1+ gives team DEF. Modeled as +100 flat DEF.',
+    },
+    target: 'team',
+    bag: { defFlat: 100 },
+    defaultOn: false,
+  },
+
+  // 行秋 Xingqiu (C6 +25% Hydro DMG conditional)
+  {
+    id: 'xingqiu-c6-hydro-dmg',
+    sourceCharacterId: 10000025,
+    label: { zh: '行秋 C6 · 雨帘剑伤害 +50%（自身近似）', en: 'Xingqiu C6 · Rainscreen +50% (self approx)' },
+    description: {
+      zh: '行秋 C6：雨帘剑剩 2 把时触发额外效果。这里只用作行秋自身 +X% 水元素伤害近似 +25%。',
+      en: "Xingqiu C6 extra effect on Rainscreen. Modeled as self +25% Hydro DMG.",
+    },
+    target: 'self',
+    bag: { hydroDmg: 0.25 },
+    requires: { minConstellation: 6 },
+    defaultOn: false,
+  },
 ]
 
 export function buffsBySource(): Map<number, BuffSpec[]> {
