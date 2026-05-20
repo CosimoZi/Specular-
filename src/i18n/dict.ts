@@ -175,6 +175,9 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'team.totalCycle': '全技能总伤',
     'team.totalDamage': '团队总伤害（轮转一周期）',
     'team.totalNote': '注：未模拟 buff 跨人物传递，结果是各角色单算的总和。',
+
+    'substatPage.movedNotice': '词条边际收益评估已整合在角色详情页的伤害表下方，先选一个角色：',
+    'substatPage.goToCharacters': '去角色列表 →',
   },
   en: {
     'app.title': 'Specular',
@@ -350,5 +353,9 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'team.totalDamage': 'Team total (one rotation)',
     'team.totalNote':
       "Note: this v1 sums each character's damage in isolation; cross-character buffs are not modelled yet.",
+
+    'substatPage.movedNotice':
+      'Substat marginal-value analysis now lives at the bottom of each character detail page. Pick a character first:',
+    'substatPage.goToCharacters': 'Go to characters →',
   },
 }
