@@ -96,6 +96,9 @@ export interface CharacterConfig {
     | 'spread'
   /** Per-hit scaling override (atk → hp/def/em). Persists across sessions. */
   scalingOverride?: Record<string, 'atk' | 'hp' | 'def' | 'em'>
+  /** Default position when this character is the focus in /team.
+   *  Some buffs are gated by "on-field" / "off-field"; this hints which. */
+  position?: 'frontline' | 'backline'
 }
 
 /** Team config + which character is the "focus" for the damage display. */

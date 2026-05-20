@@ -155,6 +155,15 @@ export default function ConfigPanel({
           }))}
           onChange={(v) => upd('ascensionStage', parseInt(v, 10))}
         />
+        <SelectRow
+          label={t('config.position')}
+          value={config.position ?? 'frontline'}
+          options={[
+            { value: 'frontline', label: t('config.frontline') },
+            { value: 'backline', label: t('config.backline') },
+          ]}
+          onChange={(v) => upd('position', v as 'frontline' | 'backline')}
+        />
         <NumberRow label={t('config.constellation')} value={config.constellation} min={0} max={6} step={1} onChange={(v) => upd('constellation', v)} />
         <NumberRow label={t('talent.normal')} value={config.talentLevels.auto} min={1} max={15} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, auto: v })} />
         <NumberRow label={t('talent.skill')} value={config.talentLevels.skill} min={1} max={15} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, skill: v })} />

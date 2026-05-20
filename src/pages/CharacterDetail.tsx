@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { displayName, getCharacterIndex, iconUrl } from '@/data'
-import { loadCharacterMeta, normalizeElement, type CharacterMeta } from '@/data/meta'
+import { loadCharacterMeta, type CharacterMeta } from '@/data/meta'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
-import { useImportedBuilds } from '@/store/imported-builds'
 import { useCharacterConfigs } from '@/store/character-configs'
 import ConfigPanel from '@/components/ConfigPanel'
 
@@ -18,7 +17,6 @@ export default function CharacterDetail() {
 
   const config = useCharacterConfigs((s) => (id ? s.get(id) : null))
   const patch = useCharacterConfigs((s) => s.patch)
-  const importedBuild = useImportedBuilds((s) => (id ? s.get(id) : undefined))
 
   useEffect(() => {
     if (!id) return
@@ -29,27 +27,9 @@ export default function CharacterDetail() {
       .catch((e) => setLoadError(e.message))
   }, [id])
 
-  // UID import → write importMode snapshot
-  useEffect(() => {
-    if (!importedBuild || !id || !idx) return
-    const elem = normalizeElement(idx.element)
-    const elemDmg = importedBuild.elementalDmg[elem] ?? 0
-    patch(id, {
-      level: importedBuild.characterLevel,
-      ascensionStage: importedBuild.ascensionStage,
-      talentLevels: importedBuild.talentLevels,
-      importMode: {
-        finalAtk: importedBuild.finalAtk,
-        finalHp: importedBuild.finalHp,
-        finalDef: importedBuild.finalDef,
-        em: importedBuild.em,
-        critRate: importedBuild.critRate,
-        critDmg: importedBuild.critDmg,
-        er: importedBuild.er,
-        elementBonus: elemDmg,
-      },
-    })
-  }, [importedBuild, id, idx, patch])
+  // UID import now writes a full CharacterConfig in UidImport.tsx. No
+  // importMode snapshot needed — the artifacts/weapon are real. We just
+  // keep the importedBuild handle around for the badge UI.
 
   if (!idx) {
     return (

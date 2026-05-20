@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchEnkaUid, type ImportResult } from '@/data/uid-import'
 import { useImportedBuilds } from '@/store/imported-builds'
+import { useCharacterConfigs } from '@/store/character-configs'
 import { getCharacterIndex, iconUrl } from '@/data'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useT } from '@/i18n/store'
@@ -9,11 +10,13 @@ import { useT } from '@/i18n/store'
 export default function UidImport() {
   const t = useT()
   const setMany = useImportedBuilds((s) => s.setMany)
+  const setConfig = useCharacterConfigs((s) => s.set)
   const navigate = useNavigate()
   const [uid, setUid] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [importedCount, setImportedCount] = useState<number>(0)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -26,7 +29,16 @@ export default function UidImport() {
     try {
       const r = await fetchEnkaUid(uid.trim())
       setResult(r)
+      // Snapshot store (for backwards compat)
       setMany(r.builds)
+      // Write FULL CharacterConfig for each imported character — they show up
+      // as "configured" in /characters with weapon + 5 artifact pieces filled.
+      let n = 0
+      for (const b of r.builds) {
+        setConfig(b.characterId, b.fullConfig)
+        n++
+      }
+      setImportedCount(n)
     } catch (e: unknown) {
       setError((e as Error).message)
     } finally {
@@ -76,7 +88,12 @@ export default function UidImport() {
               </span>
             </div>
             <div className="text-xs text-zinc-500 mt-1">
-              UID {result.uid} · {result.builds.length} {t('uid.charactersDisplayed')}
+              UID {result.uid} ({result.region}) · {result.builds.length} {t('uid.charactersDisplayed')}
+              {importedCount > 0 && (
+                <span className="ml-2 text-emerald-700 dark:text-emerald-400">
+                  · {t('uid.importedToConfigs').replace('{n}', String(importedCount))}
+                </span>
+              )}
             </div>
           </div>
 
