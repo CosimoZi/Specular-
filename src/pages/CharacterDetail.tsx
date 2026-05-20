@@ -14,22 +14,22 @@ import {
   type DamageElement,
   type Reaction,
 } from '@/engine'
-import { ELEMENT_COLOR, ELEMENT_LABEL, WEAPON_TYPE_LABEL } from '@/data/types'
+import { ELEMENT_COLOR } from '@/data/types'
+import { useT } from '@/i18n/store'
 
 interface BuildForm {
   charLevel: number
   enemyLevel: number
-  enemyRes: number // 0..n base resistance
+  enemyRes: number
   resReduction: number
   defReduction: number
   atk: number
   hp: number
   def: number
   em: number
-  critRate: number // percentage 0..100
-  critDmg: number // percentage
-  elementBonus: number // percentage (applied to character element)
-  // Per-talent level
+  critRate: number
+  critDmg: number
+  elementBonus: number
   autoLvl: number
   skillLvl: number
   burstLvl: number
@@ -66,30 +66,23 @@ const DEFAULTS: BuildForm = {
 
 function reactionFromPick(pick: ReactionPick): Reaction {
   switch (pick) {
-    case 'vape_strong':
-      return { kind: 'vape', trigger: 'pyro_on_hydro' }
-    case 'vape_weak':
-      return { kind: 'vape', trigger: 'hydro_on_pyro' }
-    case 'melt_strong':
-      return { kind: 'melt', trigger: 'pyro_on_cryo' }
-    case 'melt_weak':
-      return { kind: 'melt', trigger: 'cryo_on_pyro' }
-    case 'aggravate':
-      return { kind: 'aggravate' }
-    case 'spread':
-      return { kind: 'spread' }
-    default:
-      return { kind: 'none' }
+    case 'vape_strong': return { kind: 'vape', trigger: 'pyro_on_hydro' }
+    case 'vape_weak': return { kind: 'vape', trigger: 'hydro_on_pyro' }
+    case 'melt_strong': return { kind: 'melt', trigger: 'pyro_on_cryo' }
+    case 'melt_weak': return { kind: 'melt', trigger: 'cryo_on_pyro' }
+    case 'aggravate': return { kind: 'aggravate' }
+    case 'spread': return { kind: 'spread' }
+    default: return { kind: 'none' }
   }
 }
 
 export default function CharacterDetail() {
+  const t = useT()
   const { id } = useParams<{ id: string }>()
   const idx = id ? getCharacterIndex(id) : undefined
   const [meta, setMeta] = useState<CharacterMeta | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [form, setForm] = useState<BuildForm>(DEFAULTS)
-  // Per-hit scaling override map: key = "<role>:<paramIndex>", value = scaling
   const [scalingOverride, setScalingOverride] = useState<
     Record<string, 'atk' | 'hp' | 'def' | 'em'>
   >({})
@@ -103,9 +96,7 @@ export default function CharacterDetail() {
       .catch((e) => setLoadError(e.message))
   }, [id])
 
-  const element: DamageElement = idx
-    ? normalizeElement(idx.element)
-    : 'Physical'
+  const element: DamageElement = idx ? normalizeElement(idx.element) : 'Physical'
 
   const rows = useMemo(() => {
     if (!meta) return []
@@ -116,8 +107,8 @@ export default function CharacterDetail() {
         hpFlat: form.hp,
         defFlat: form.def,
         em: form.em,
-        critRate: form.critRate / 100 - 0.05, // engine baseline is 5%
-        critDmg: form.critDmg / 100 - 0.5, // engine baseline 50%
+        critRate: form.critRate / 100 - 0.05,
+        critDmg: form.critDmg / 100 - 0.5,
         pyroDmg: element === 'Pyro' ? form.elementBonus / 100 : 0,
         hydroDmg: element === 'Hydro' ? form.elementBonus / 100 : 0,
         cryoDmg: element === 'Cryo' ? form.elementBonus / 100 : 0,
@@ -133,24 +124,14 @@ export default function CharacterDetail() {
     const target = {
       level: form.enemyLevel,
       resistance: {
-        Pyro: baseRes,
-        Hydro: baseRes,
-        Cryo: baseRes,
-        Electro: baseRes,
-        Anemo: baseRes,
-        Geo: baseRes,
-        Dendro: baseRes,
-        Physical: baseRes,
+        Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
+        Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
       },
       resReduction: {
-        Pyro: form.resReduction / 100,
-        Hydro: form.resReduction / 100,
-        Cryo: form.resReduction / 100,
-        Electro: form.resReduction / 100,
-        Anemo: form.resReduction / 100,
-        Geo: form.resReduction / 100,
-        Dendro: form.resReduction / 100,
-        Physical: form.resReduction / 100,
+        Pyro: form.resReduction / 100, Hydro: form.resReduction / 100,
+        Cryo: form.resReduction / 100, Electro: form.resReduction / 100,
+        Anemo: form.resReduction / 100, Geo: form.resReduction / 100,
+        Dendro: form.resReduction / 100, Physical: form.resReduction / 100,
       },
       defReduction: form.defReduction / 100,
     }
@@ -163,32 +144,23 @@ export default function CharacterDetail() {
       out: ReturnType<typeof calcDamage>
     }> = []
 
-    const sections: Array<{
-      role: 'auto' | 'skill' | 'burst'
-      lvl: number
-    }> = [
+    const sections: Array<{ role: 'auto' | 'skill' | 'burst'; lvl: number }> = [
       { role: 'auto', lvl: form.autoLvl },
       { role: 'skill', lvl: form.skillLvl },
       { role: 'burst', lvl: form.burstLvl },
     ]
     for (const { role, lvl } of sections) {
-      const t = meta.talents[role]
-      if (!t) continue
-      for (const hit of t.hits) {
-        const m = hitMultiplier(t, hit, lvl)
+      const tlt = meta.talents[role]
+      if (!tlt) continue
+      for (const hit of tlt.hits) {
+        const m = hitMultiplier(tlt, hit, lvl)
         if (m == null) continue
         const key = `${role}:${hit.paramIndex}:${hit.label}`
         const scaling = scalingOverride[key] ?? hit.scaling
         const out = calcDamage(
           attacker,
           target,
-          {
-            label: hit.label,
-            scaling,
-            multiplier: m,
-            element,
-            hitType: hit.hitType,
-          },
+          { label: hit.label, scaling, multiplier: m, element, hitType: hit.hitType },
           reaction,
         )
         collect.push({ role, lvl, hit: { ...hit, scaling }, multiplier: m, out })
@@ -200,9 +172,9 @@ export default function CharacterDetail() {
   if (!idx) {
     return (
       <div>
-        <h1 className="text-2xl font-semibold">未找到角色</h1>
+        <h1 className="text-2xl font-semibold">{t('characters.notFound')}</h1>
         <Link to="/characters" className="text-blue-600 hover:underline">
-          ← 返回列表
+          {t('characters.backToList')}
         </Link>
       </div>
     )
@@ -214,51 +186,46 @@ export default function CharacterDetail() {
         <div
           className="w-20 h-20 rounded-lg overflow-hidden"
           style={{
-            background: `linear-gradient(180deg, ${
-              ELEMENT_COLOR[idx.element] ?? '#888'
-            }55, transparent)`,
+            background: `linear-gradient(180deg, ${ELEMENT_COLOR[idx.element] ?? '#888'}55, transparent)`,
           }}
         >
-          <img
-            src={iconUrl(idx.icon)}
-            alt={idx.name}
-            className="w-full h-full object-cover"
-          />
+          <img src={iconUrl(idx.icon)} alt={idx.name} className="w-full h-full object-cover" />
         </div>
         <div>
           <h1 className="text-2xl font-semibold">{idx.name}</h1>
           <div className="text-sm text-zinc-500 flex gap-3 mt-1">
-            <span style={{ color: ELEMENT_COLOR[idx.element] }}>
-              {ELEMENT_LABEL[idx.element] ?? idx.element}
-            </span>
+            <span style={{ color: ELEMENT_COLOR[idx.element] }}>{t(`element.${idx.element}`)}</span>
             <span>·</span>
             <span>{idx.rank}★</span>
             <span>·</span>
-            <span>{WEAPON_TYPE_LABEL[idx.weaponType]}</span>
+            <span>{t(`weapon.${idx.weaponType}`)}</span>
             <span>·</span>
             <span>{idx.region}</span>
           </div>
         </div>
         <Link to="/characters" className="ml-auto text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-          ← 列表
+          {t('characters.backToList')}
         </Link>
       </div>
 
       {loadError && (
-        <div className="text-red-600 text-sm">加载技能数据失败：{loadError}</div>
+        <div className="text-red-600 text-sm">
+          {t('detail.loadError')}{loadError}
+        </div>
       )}
       {!meta && !loadError && (
-        <div className="text-zinc-500 text-sm">加载中…</div>
+        <div className="text-zinc-500 text-sm">{t('detail.loading')}</div>
       )}
 
       {meta && (
         <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-          <BuildPanel form={form} setForm={setForm} element={element} />
+          <BuildPanel form={form} setForm={setForm} element={element} t={t} />
           <DamagePanel
             meta={meta}
             rows={rows}
             scalingOverride={scalingOverride}
             setScalingOverride={setScalingOverride}
+            t={t}
           />
         </div>
       )}
@@ -270,59 +237,61 @@ function BuildPanel({
   form,
   setForm,
   element,
+  t,
 }: {
   form: BuildForm
   setForm: (next: BuildForm) => void
   element: DamageElement
+  t: (key: string, fallback?: string) => string
 }) {
   const upd = (k: keyof BuildForm, v: number | string) =>
     setForm({ ...form, [k]: v as never })
   return (
     <div className="space-y-4">
       <section>
-        <h3 className="text-sm font-semibold mb-2">面板</h3>
-        <NumberRow label="攻击力" value={form.atk} step={50} onChange={(v) => upd('atk', v)} />
-        <NumberRow label="生命值" value={form.hp} step={500} onChange={(v) => upd('hp', v)} />
-        <NumberRow label="防御力" value={form.def} step={50} onChange={(v) => upd('def', v)} />
-        <NumberRow label="元素精通" value={form.em} step={20} onChange={(v) => upd('em', v)} />
-        <NumberRow label="暴击率 %" value={form.critRate} step={5} onChange={(v) => upd('critRate', v)} />
-        <NumberRow label="暴击伤害 %" value={form.critDmg} step={10} onChange={(v) => upd('critDmg', v)} />
+        <h3 className="text-sm font-semibold mb-2">{t('detail.section.stats')}</h3>
+        <NumberRow label={t('stat.atk')} value={form.atk} step={50} onChange={(v) => upd('atk', v)} />
+        <NumberRow label={t('stat.hp')} value={form.hp} step={500} onChange={(v) => upd('hp', v)} />
+        <NumberRow label={t('stat.def')} value={form.def} step={50} onChange={(v) => upd('def', v)} />
+        <NumberRow label={t('stat.em')} value={form.em} step={20} onChange={(v) => upd('em', v)} />
+        <NumberRow label={t('stat.critRate')} value={form.critRate} step={5} onChange={(v) => upd('critRate', v)} />
+        <NumberRow label={t('stat.critDmg')} value={form.critDmg} step={10} onChange={(v) => upd('critDmg', v)} />
         <NumberRow
-          label={`${ELEMENT_LABEL[element] ?? element}伤加成 %`}
+          label={`${t(`element.${element}`)}${t('stat.elementBonus')}`}
           value={form.elementBonus}
           step={5}
           onChange={(v) => upd('elementBonus', v)}
         />
       </section>
       <section>
-        <h3 className="text-sm font-semibold mb-2">天赋等级</h3>
-        <NumberRow label="普攻" value={form.autoLvl} step={1} min={1} max={15} onChange={(v) => upd('autoLvl', v)} />
-        <NumberRow label="战技 E" value={form.skillLvl} step={1} min={1} max={15} onChange={(v) => upd('skillLvl', v)} />
-        <NumberRow label="爆发 Q" value={form.burstLvl} step={1} min={1} max={15} onChange={(v) => upd('burstLvl', v)} />
+        <h3 className="text-sm font-semibold mb-2">{t('detail.section.talentLevels')}</h3>
+        <NumberRow label={t('talent.normal')} value={form.autoLvl} step={1} min={1} max={15} onChange={(v) => upd('autoLvl', v)} />
+        <NumberRow label={t('talent.skill')} value={form.skillLvl} step={1} min={1} max={15} onChange={(v) => upd('skillLvl', v)} />
+        <NumberRow label={t('talent.burst')} value={form.burstLvl} step={1} min={1} max={15} onChange={(v) => upd('burstLvl', v)} />
       </section>
       <section>
-        <h3 className="text-sm font-semibold mb-2">敌人</h3>
-        <NumberRow label="等级" value={form.enemyLevel} step={5} min={1} max={110} onChange={(v) => upd('enemyLevel', v)} />
-        <NumberRow label="基础抗性 %" value={form.enemyRes} step={5} onChange={(v) => upd('enemyRes', v)} />
-        <NumberRow label="抗性削减 %" value={form.resReduction} step={5} onChange={(v) => upd('resReduction', v)} />
-        <NumberRow label="防御削减 %" value={form.defReduction} step={5} onChange={(v) => upd('defReduction', v)} />
+        <h3 className="text-sm font-semibold mb-2">{t('detail.section.enemy')}</h3>
+        <NumberRow label={t('enemy.level')} value={form.enemyLevel} step={5} min={1} max={110} onChange={(v) => upd('enemyLevel', v)} />
+        <NumberRow label={t('enemy.baseRes')} value={form.enemyRes} step={5} onChange={(v) => upd('enemyRes', v)} />
+        <NumberRow label={t('enemy.resReduction')} value={form.resReduction} step={5} onChange={(v) => upd('resReduction', v)} />
+        <NumberRow label={t('enemy.defReduction')} value={form.defReduction} step={5} onChange={(v) => upd('defReduction', v)} />
       </section>
       <section>
-        <h3 className="text-sm font-semibold mb-2">玩家等级 + 反应</h3>
-        <NumberRow label="角色等级" value={form.charLevel} step={5} min={1} max={90} onChange={(v) => upd('charLevel', v)} />
-        <label className="block text-xs text-zinc-500 mb-1">反应</label>
+        <h3 className="text-sm font-semibold mb-2">{t('detail.section.player')}</h3>
+        <NumberRow label={t('player.charLevel')} value={form.charLevel} step={5} min={1} max={90} onChange={(v) => upd('charLevel', v)} />
+        <label className="block text-xs text-zinc-500 mb-1">{t('reaction.label')}</label>
         <select
           value={form.reaction}
           onChange={(e) => upd('reaction', e.target.value)}
           className="w-full px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
         >
-          <option value="none">无反应（直伤）</option>
-          <option value="vape_strong">蒸发（强）— 火→水</option>
-          <option value="vape_weak">蒸发（弱）— 水→火</option>
-          <option value="melt_strong">融化（强）— 火→冰</option>
-          <option value="melt_weak">融化（弱）— 冰→火</option>
-          <option value="aggravate">超激化（雷+草）</option>
-          <option value="spread">蔓激化（草+雷）</option>
+          <option value="none">{t('reaction.none')}</option>
+          <option value="vape_strong">{t('reaction.vape_strong')}</option>
+          <option value="vape_weak">{t('reaction.vape_weak')}</option>
+          <option value="melt_strong">{t('reaction.melt_strong')}</option>
+          <option value="melt_weak">{t('reaction.melt_weak')}</option>
+          <option value="aggravate">{t('reaction.aggravate')}</option>
+          <option value="spread">{t('reaction.spread')}</option>
         </select>
       </section>
     </div>
@@ -330,12 +299,7 @@ function BuildPanel({
 }
 
 function NumberRow({
-  label,
-  value,
-  step = 1,
-  min,
-  max,
-  onChange,
+  label, value, step = 1, min, max, onChange,
 }: {
   label: string
   value: number
@@ -364,10 +328,7 @@ function NumberRow({
 }
 
 function DamagePanel({
-  meta,
-  rows,
-  scalingOverride,
-  setScalingOverride,
+  meta, rows, scalingOverride, setScalingOverride, t,
 }: {
   meta: CharacterMeta
   rows: Array<{
@@ -378,9 +339,8 @@ function DamagePanel({
     out: ReturnType<typeof calcDamage>
   }>
   scalingOverride: Record<string, 'atk' | 'hp' | 'def' | 'em'>
-  setScalingOverride: (
-    s: Record<string, 'atk' | 'hp' | 'def' | 'em'>,
-  ) => void
+  setScalingOverride: (s: Record<string, 'atk' | 'hp' | 'def' | 'em'>) => void
+  t: (key: string, fallback?: string) => string
 }) {
   const groups = useMemo(() => {
     const g: Record<string, typeof rows> = { auto: [], skill: [], burst: [] }
@@ -389,11 +349,10 @@ function DamagePanel({
   }, [rows])
 
   const roleLabels: Record<string, string> = {
-    auto: `普攻 · ${meta.talents.auto?.name ?? ''}`,
-    skill: `战技 · ${meta.talents.skill?.name ?? ''}`,
-    burst: `爆发 · ${meta.talents.burst?.name ?? ''}`,
+    auto: `${t('talent.normalFull')} · ${meta.talents.auto?.name ?? ''}`,
+    skill: `${t('talent.skillFull')} · ${meta.talents.skill?.name ?? ''}`,
+    burst: `${t('talent.burstFull')} · ${meta.talents.burst?.name ?? ''}`,
   }
-
   const fmt = (n: number) => Math.round(n).toLocaleString()
 
   return (
@@ -402,32 +361,26 @@ function DamagePanel({
         const list = groups[role]
         if (!list.length) return null
         return (
-          <section
-            key={role}
-            className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden"
-          >
+          <section key={role} className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
             <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
               {roleLabels[role]}
             </h3>
             <table className="w-full text-sm">
               <thead className="text-xs text-zinc-500 bg-zinc-50/50 dark:bg-zinc-900/50">
                 <tr>
-                  <th className="text-left px-4 py-2 font-normal">技能</th>
-                  <th className="text-left px-2 py-2 font-normal w-24">倍率</th>
-                  <th className="text-left px-2 py-2 font-normal w-24">scaling</th>
-                  <th className="text-right px-2 py-2 font-normal">非暴击</th>
-                  <th className="text-right px-2 py-2 font-normal">暴击</th>
-                  <th className="text-right px-4 py-2 font-normal">期望</th>
+                  <th className="text-left px-4 py-2 font-normal">{t('damage.skill')}</th>
+                  <th className="text-left px-2 py-2 font-normal w-24">{t('damage.multiplier')}</th>
+                  <th className="text-left px-2 py-2 font-normal w-24">{t('damage.scaling')}</th>
+                  <th className="text-right px-2 py-2 font-normal">{t('damage.nonCrit')}</th>
+                  <th className="text-right px-2 py-2 font-normal">{t('damage.crit')}</th>
+                  <th className="text-right px-4 py-2 font-normal">{t('damage.avg')}</th>
                 </tr>
               </thead>
               <tbody>
                 {list.map((r, i) => {
                   const key = `${r.role}:${r.hit.paramIndex}:${r.hit.label}`
                   return (
-                    <tr
-                      key={i}
-                      className="border-t border-zinc-100 dark:border-zinc-800"
-                    >
+                    <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
                       <td className="px-4 py-2">{r.hit.label}</td>
                       <td className="px-2 py-2 text-zinc-500 text-xs">
                         {(r.multiplier * 100).toFixed(1)}%
@@ -438,23 +391,20 @@ function DamagePanel({
                           onChange={(e) =>
                             setScalingOverride({
                               ...scalingOverride,
-                              [key]: e.target
-                                .value as 'atk' | 'hp' | 'def' | 'em',
+                              [key]: e.target.value as 'atk' | 'hp' | 'def' | 'em',
                             })
                           }
                           className={`text-xs px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 ${
                             scalingOverride[key] ? 'border-amber-500 dark:border-amber-400' : ''
                           }`}
                         >
-                          <option value="atk">攻击</option>
-                          <option value="hp">生命</option>
-                          <option value="def">防御</option>
-                          <option value="em">精通</option>
+                          <option value="atk">{t('damage.scaling.atk')}</option>
+                          <option value="hp">{t('damage.scaling.hp')}</option>
+                          <option value="def">{t('damage.scaling.def')}</option>
+                          <option value="em">{t('damage.scaling.em')}</option>
                         </select>
                       </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {fmt(r.out.nonCrit)}
-                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">{fmt(r.out.nonCrit)}</td>
                       <td className="px-2 py-2 text-right tabular-nums text-amber-700 dark:text-amber-400">
                         {fmt(r.out.crit)}
                       </td>
@@ -470,9 +420,7 @@ function DamagePanel({
         )
       })}
       <p className="text-xs text-zinc-500">
-        <strong>注</strong>：倍率自动从 ambr 数据抽出，但 <em>scaling</em> 默认按 ATK；
-        HP/防御/精通 倍率角色（胡桃、那维莱特、夜兰、钟离等）请在下拉框里改正。
-        修改即时生效。
+        <strong>{t('damage.noteEmphasis')}</strong>：{t('damage.note')}
       </p>
     </div>
   )

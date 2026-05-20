@@ -1,28 +1,30 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { iconUrl, listCharacters } from '@/data'
-import { ELEMENT_COLOR, ELEMENT_LABEL, WEAPON_TYPE_LABEL } from '@/data/types'
+import { ELEMENT_COLOR } from '@/data/types'
 import type { Element, WeaponType } from '@/data/types'
+import { useT } from '@/i18n/store'
 
-const ELEMENT_FILTERS: Array<{ key: Element; label: string }> = [
-  { key: 'Pyro' as Element, label: '火' },
-  { key: 'Hydro' as Element, label: '水' },
-  { key: 'Cryo' as Element, label: '冰' },
-  { key: 'Electric' as Element, label: '雷' },
-  { key: 'Anemo' as Element, label: '风' },
-  { key: 'Geo' as Element, label: '岩' },
-  { key: 'Grass' as Element, label: '草' },
+const ELEMENT_FILTERS: Element[] = [
+  'Pyro' as Element,
+  'Hydro' as Element,
+  'Cryo' as Element,
+  'Electric' as Element,
+  'Anemo' as Element,
+  'Geo' as Element,
+  'Grass' as Element,
 ]
 
-const WEAPON_FILTERS: Array<{ key: WeaponType; label: string }> = [
-  { key: 'WEAPON_SWORD_ONE_HAND', label: '单手剑' },
-  { key: 'WEAPON_CLAYMORE', label: '双手剑' },
-  { key: 'WEAPON_POLE', label: '长柄' },
-  { key: 'WEAPON_BOW', label: '弓' },
-  { key: 'WEAPON_CATALYST', label: '法器' },
+const WEAPON_FILTERS: WeaponType[] = [
+  'WEAPON_SWORD_ONE_HAND',
+  'WEAPON_CLAYMORE',
+  'WEAPON_POLE',
+  'WEAPON_BOW',
+  'WEAPON_CATALYST',
 ]
 
 export default function Characters() {
+  const t = useT()
   const all = useMemo(() => listCharacters(), [])
   const [query, setQuery] = useState('')
   const [elemFilter, setElemFilter] = useState<Set<string>>(new Set())
@@ -34,8 +36,7 @@ export default function Characters() {
     return all.filter((c) => {
       if (q && !c.name.toLowerCase().includes(q) && !c.route.toLowerCase().includes(q))
         return false
-      if (elemFilter.size && !elemFilter.has(c.element)) {
-        // Element keys aren't normalised — accept any synonym
+      if (elemFilter.size) {
         const synonyms: Record<string, string[]> = {
           Pyro: ['Pyro', 'Fire'],
           Hydro: ['Hydro', 'Water'],
@@ -56,10 +57,10 @@ export default function Characters() {
     })
   }, [all, query, elemFilter, rankFilter, weaponFilter])
 
-  const toggle = (
-    set: Set<string | number>,
-    key: string | number,
-    setter: (s: Set<string | number>) => void,
+  const toggle = <T extends string | number>(
+    set: Set<T>,
+    key: T,
+    setter: (s: Set<T>) => void,
   ) => {
     const next = new Set(set)
     if (next.has(key)) next.delete(key)
@@ -70,10 +71,10 @@ export default function Characters() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">角色 ({filtered.length}/{all.length})</h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          点击进入详情页查看技能倍率表 + 简易伤害计算。
-        </p>
+        <h1 className="text-2xl font-semibold">
+          {t('characters.title')} ({filtered.length}/{all.length})
+        </h1>
+        <p className="text-sm text-zinc-500 mt-1">{t('characters.hint')}</p>
       </div>
 
       <div className="space-y-3">
@@ -81,46 +82,46 @@ export default function Characters() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索名字或拼音…"
+          placeholder={t('characters.searchPlaceholder')}
           className="w-full md:max-w-md px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
         />
-        <FilterGroup label="元素">
-          {ELEMENT_FILTERS.map((f) => (
+        <FilterGroup label={t('characters.filter.element')}>
+          {ELEMENT_FILTERS.map((key) => (
             <Chip
-              key={f.key}
-              active={elemFilter.has(f.key)}
-              color={ELEMENT_COLOR[f.key]}
+              key={key}
+              active={elemFilter.has(key)}
+              color={ELEMENT_COLOR[key]}
               onClick={() =>
-                toggle(elemFilter, f.key, (s) => setElemFilter(s as Set<string>))
+                toggle(elemFilter as Set<string>, key, (s) => setElemFilter(s))
               }
             >
-              {f.label}
+              {t(`element.${key}`)}
             </Chip>
           ))}
         </FilterGroup>
-        <FilterGroup label="星级">
+        <FilterGroup label={t('characters.filter.rarity')}>
           {[5, 4].map((r) => (
             <Chip
               key={r}
               active={rankFilter.has(r)}
               onClick={() =>
-                toggle(rankFilter, r, (s) => setRankFilter(s as Set<number>))
+                toggle(rankFilter as Set<number>, r, (s) => setRankFilter(s))
               }
             >
               {r}★
             </Chip>
           ))}
         </FilterGroup>
-        <FilterGroup label="武器">
-          {WEAPON_FILTERS.map((f) => (
+        <FilterGroup label={t('characters.filter.weapon')}>
+          {WEAPON_FILTERS.map((key) => (
             <Chip
-              key={f.key}
-              active={weaponFilter.has(f.key)}
+              key={key}
+              active={weaponFilter.has(key)}
               onClick={() =>
-                toggle(weaponFilter, f.key, (s) => setWeaponFilter(s as Set<string>))
+                toggle(weaponFilter as Set<string>, key, (s) => setWeaponFilter(s))
               }
             >
-              {f.label}
+              {t(`weapon.${key}`)}
             </Chip>
           ))}
         </FilterGroup>
@@ -153,12 +154,12 @@ export default function Characters() {
               className="text-xs flex justify-center gap-1 items-center"
               style={{ color: ELEMENT_COLOR[c.element] ?? undefined }}
             >
-              <span>{ELEMENT_LABEL[c.element] ?? c.element}</span>
+              <span>{t(`element.${c.element}`)}</span>
               <span className="text-zinc-400">·</span>
               <span>{c.rank}★</span>
             </div>
             <div className="text-[10px] text-zinc-500 truncate">
-              {WEAPON_TYPE_LABEL[c.weaponType]}
+              {t(`weapon.${c.weaponType}`)}
             </div>
           </Link>
         ))}
@@ -176,7 +177,7 @@ function FilterGroup({
 }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-zinc-500 w-10">{label}</span>
+      <span className="text-xs text-zinc-500 w-16">{label}</span>
       <div className="flex gap-1.5 flex-wrap">{children}</div>
     </div>
   )
