@@ -1,4 +1,5 @@
 import metaSummary from './index/meta-summary.json'
+import { applyOverrides } from './scaling-overrides'
 import type { DamageElement, StatBag } from '@/engine/types'
 
 export interface ExtractedHit {
@@ -66,15 +67,19 @@ export const META_SUMMARY = metaSummary as unknown as Record<string, MetaSummary
 const base = (import.meta.env.BASE_URL ?? '/').replace(/\/?$/, '/')
 const cache = new Map<string, CharacterMeta>()
 
-/** Eager-load meta for a character. Note: meta files are stored under
- *  src/data/meta/ and are NOT in the bundle by default — we copy them via
- *  the build script into public/data/meta/, then fetch. */
+/** Eager-load meta for a character, applying hand-curated scaling-stat
+ *  overrides on top of the auto-extracted hits. */
 export async function loadCharacterMeta(id: number | string): Promise<CharacterMeta> {
   const k = String(id)
   if (cache.has(k)) return cache.get(k)!
   const res = await fetch(`${base}data/meta/${k}.json`)
   if (!res.ok) throw new Error(`meta ${k}: HTTP ${res.status}`)
   const data = (await res.json()) as CharacterMeta
+  // Apply scaling overrides in place so the UI defaults are correct for
+  // HP / DEF / EM scaling characters where ambr's templates don't disambiguate.
+  if (data.talents.auto) applyOverrides(k, 'auto', data.talents.auto.hits)
+  if (data.talents.skill) applyOverrides(k, 'skill', data.talents.skill.hits)
+  if (data.talents.burst) applyOverrides(k, 'burst', data.talents.burst.hits)
   cache.set(k, data)
   return data
 }
