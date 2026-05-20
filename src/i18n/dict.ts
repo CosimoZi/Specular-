@@ -168,6 +168,13 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'substat.atkFlat': '固定攻击 (+19.45)',
     'substat.hpFlat': '固定生命 (+298.75)',
     'substat.defFlat': '固定防御 (+23.15)',
+
+    'team.hint': '至多 4 个角色并排比较。导入 UID 后会用你的真实面板，否则用 lvl 90 + 默认 build 估算。v1 不含跨人物增益传递（班尼特 Q、芙宁娜等）。',
+    'team.emptySlot': '空位',
+    'team.bestHit': '最高单次（期望）',
+    'team.totalCycle': '全技能总伤',
+    'team.totalDamage': '团队总伤害（轮转一周期）',
+    'team.totalNote': '注：未模拟 buff 跨人物传递，结果是各角色单算的总和。',
   },
   en: {
     'app.title': 'Specular',
@@ -334,5 +341,14 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'substat.atkFlat': 'Flat ATK (+19.45)',
     'substat.hpFlat': 'Flat HP (+298.75)',
     'substat.defFlat': 'Flat DEF (+23.15)',
+
+    'team.hint':
+      'Up to 4 characters side by side. UID-imported builds use your real stats; otherwise lvl 90 + default build is assumed. v1 does NOT model cross-character buffs (Bennett Q, Furina fanfare, etc.).',
+    'team.emptySlot': 'Empty slot',
+    'team.bestHit': 'Top single hit (avg)',
+    'team.totalCycle': 'All-skill total',
+    'team.totalDamage': 'Team total (one rotation)',
+    'team.totalNote':
+      "Note: this v1 sums each character's damage in isolation; cross-character buffs are not modelled yet.",
   },
 }
