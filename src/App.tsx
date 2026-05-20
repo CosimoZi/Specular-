@@ -6,6 +6,7 @@ import CharacterDetail from '@/pages/CharacterDetail'
 import Substat from '@/pages/Substat'
 import Team from '@/pages/Team'
 import UidImport from '@/pages/UidImport'
+import Settings from '@/pages/Settings'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="substat" element={<Substat />} />
           <Route path="team" element={<Team />} />
           <Route path="uid" element={<UidImport />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </HashRouter>

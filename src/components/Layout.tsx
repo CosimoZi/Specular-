@@ -60,16 +60,21 @@ export default function Layout() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
         <Outlet />
       </main>
-      <footer className="border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 py-4 text-center">
-        {t('app.footer')}{' '}
-        <a
-          className="underline hover:text-zinc-700 dark:hover:text-zinc-300"
-          href="https://ambr.top"
-          target="_blank"
-          rel="noreferrer"
-        >
-          ambr.top
-        </a>
+      <footer className="border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 py-4 text-center space-x-3">
+        <span>
+          {t('app.footer')}{' '}
+          <a
+            className="underline hover:text-zinc-700 dark:hover:text-zinc-300"
+            href="https://ambr.top"
+            target="_blank"
+            rel="noreferrer"
+          >
+            ambr.top
+          </a>
+        </span>
+        <NavLink to="/settings" className="underline hover:text-zinc-700 dark:hover:text-zinc-300">
+          {t('nav.settings')}
+        </NavLink>
       </footer>
     </div>
   )

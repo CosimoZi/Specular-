@@ -201,6 +201,25 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'config.importedTag': '已从 UID 导入',
     'config.importedNote': '正在使用 Enka 给你的最终聚合面板（已包含武器/圣遗物/突破），下方编辑器对当前计算不生效，除非清除导入。',
     'config.clearImport': '清除导入，按下方配置重算',
+
+    'nav.settings': '设置',
+    'settings.title': '设置',
+    'settings.storage': '当前存储',
+    'settings.charactersStored': '位角色已保存',
+    'settings.sync': '导出 / 导入',
+    'settings.syncHint':
+      '所有角色配置默认存在浏览器 localStorage 里。换设备 / 换浏览器请先导出 JSON，再到新环境导入。',
+    'settings.export': '导出 JSON',
+    'settings.import': '导入 JSON',
+    'settings.exportDone': '已下载',
+    'settings.importDone': '导入了 {n} 个角色配置',
+    'settings.importFailed': '导入失败：文件不是合法的配置 JSON',
+    'settings.danger': '危险区',
+    'settings.clearAll': '清空所有角色配置',
+    'settings.clearConfirm': '确定要清空所有角色配置吗？此操作不可撤销。',
+    'settings.futureSync': '未来的同步方案',
+    'settings.futureSyncDetail':
+      '我们计划接入可选的 GitHub Gist 同步（用户用自己的 PAT，不依赖 Specular 后端）。如果你有兴趣或别的同步偏好，欢迎在 issue 区提出。',
   },
   en: {
     'app.title': 'Specular',
@@ -405,5 +424,25 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'config.importedNote':
       "Using Enka's aggregated final stats (already includes weapon/artifacts/ascension). The editor below doesn't affect the current calc unless you clear the import.",
     'config.clearImport': 'Clear import, recompute from config below',
+
+    'nav.settings': 'Settings',
+    'settings.title': 'Settings',
+    'settings.storage': 'Current storage',
+    'settings.charactersStored': 'character configs saved',
+    'settings.sync': 'Export / Import',
+    'settings.syncHint':
+      "All character configs live in your browser's localStorage by default. To move them across devices, export the JSON file and import it in the new environment.",
+    'settings.export': 'Export JSON',
+    'settings.import': 'Import JSON',
+    'settings.exportDone': 'Downloaded',
+    'settings.importDone': 'Imported {n} character configs',
+    'settings.importFailed': 'Import failed — file is not a valid configs JSON',
+    'settings.danger': 'Danger zone',
+    'settings.clearAll': 'Clear all character configs',
+    'settings.clearConfirm':
+      'Clear all character configs? This cannot be undone.',
+    'settings.futureSync': 'Future sync options',
+    'settings.futureSyncDetail':
+      "We're planning optional GitHub Gist sync (users bring their own PAT — no Specular backend). If you have other sync preferences, open an issue.",
   },
 }
