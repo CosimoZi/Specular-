@@ -13,7 +13,7 @@ import {
   type CharacterMeta,
   type ExtractedHit,
 } from '@/data/meta'
-import { deriveConfigStats } from '@/data/config-to-stats'
+import { deriveConfigStats, type DerivedStatsInput } from '@/data/config-to-stats'
 import {
   aggregateStats,
   calcDamage,
@@ -21,13 +21,20 @@ import {
   type Reaction,
   type StatBag,
 } from '@/engine'
+import {
+  aggregateZoneBuffs,
+  partValue,
+  type BuffSpec,
+  type ZoneBuffs,
+  type Position,
+} from '@/engine/buff-zones'
+import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
 import { useCharacterConfigs } from '@/store/character-configs'
 import { useTeamConfig } from '@/store/team-config'
 import { isConfigured, type TeamConfig, type CharacterConfig } from '@/data/config-types'
-import { BUFFS, eligibleBuffsForTeam, type BuffSpec } from '@/data/buffs'
 
 function reactionFromPick(pick: TeamConfig['reaction']): Reaction {
   switch (pick) {
@@ -41,11 +48,66 @@ function reactionFromPick(pick: TeamConfig['reaction']): Reaction {
   }
 }
 
+function reactionKindOf(pick: TeamConfig['reaction']): 'vape' | 'melt' | 'aggravate' | 'spread' | 'none' {
+  switch (pick) {
+    case 'vape_strong': case 'vape_weak': return 'vape'
+    case 'melt_strong': case 'melt_weak': return 'melt'
+    case 'aggravate': return 'aggravate'
+    case 'spread': return 'spread'
+    default: return 'none'
+  }
+}
+
 type ComputedRow = {
   role: 'auto' | 'skill' | 'burst'
   hit: ExtractedHit
   multiplier: number
   out: ReturnType<typeof calcDamage>
+  appliedZones: ZoneBuffs
+}
+
+/** Convert ZoneBuffs (for one hit) into a StatBag delta + per-hit / per-target overrides. */
+function zonesToOverrides(zones: ZoneBuffs, hitElement: DamageElement): {
+  statBagDelta: StatBag
+  targetResShred: number
+  targetDefIgnore: number
+  targetDefShred: number
+  hitReactionBonus: number
+  hitAdditiveFlat: number
+} {
+  const elemKey: keyof StatBag = (() => {
+    switch (hitElement) {
+      case 'Pyro': return 'pyroDmg'
+      case 'Hydro': return 'hydroDmg'
+      case 'Cryo': return 'cryoDmg'
+      case 'Electro': return 'electroDmg'
+      case 'Anemo': return 'anemoDmg'
+      case 'Geo': return 'geoDmg'
+      case 'Dendro': return 'dendroDmg'
+      case 'Physical': return 'physicalDmg'
+    }
+  })()
+  const bag: StatBag = {
+    atkFlat: zones.baseAtkFlat,
+    atkPct: zones.baseAtkPct,
+    hpFlat: zones.baseHpFlat,
+    hpPct: zones.baseHpPct,
+    defFlat: zones.baseDefFlat,
+    defPct: zones.baseDefPct,
+    em: zones.em,
+    er: zones.er,
+    critRate: zones.critRate,
+    critDmg: zones.critDmg,
+    [elemKey]: zones.dmgBonus,
+  }
+  return {
+    statBagDelta: bag,
+    targetResShred: zones.resShred,
+    targetDefIgnore: zones.defIgnore,
+    targetDefShred: zones.defShred,
+    hitReactionBonus: zones.reactionBonus,
+    hitAdditiveFlat: zones.additiveFlat,
+  }
 }
 
 export default function Team() {
@@ -60,104 +122,87 @@ export default function Team() {
   const getConfig = useCharacterConfigs((s) => s.get)
   const allCharacters = useMemo(() => listCharacters(), [])
 
-  // Picker modal state
   const [pickerSlot, setPickerSlot] = useState<number | null>(null)
   const [pickerQuery, setPickerQuery] = useState('')
 
-  // Load metas for all team members
   const [metaMap, setMetaMap] = useState<Record<string, CharacterMeta>>({})
   useEffect(() => {
     const ids = team.slots.filter((s): s is number | string => s !== null).map(String)
     for (const id of ids) {
       if (metaMap[id]) continue
-      loadCharacterMeta(id)
-        .then((m) => setMetaMap((prev) => ({ ...prev, [id]: m })))
-        .catch(() => {})
+      loadCharacterMeta(id).then((m) => setMetaMap((p) => ({ ...p, [id]: m }))).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team.slots.join(',')])
 
-  // Compute focus
   const focusIdx = team.focusIndex ?? team.slots.findIndex((s) => s !== null)
   const focusCharId = focusIdx >= 0 ? team.slots[focusIdx] : null
+  const focusConfig = focusCharId != null ? getConfig(focusCharId) : null
+  const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
+  const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
 
-  // Eligible buffs from the current team
   const eligibleBuffs = useMemo(() => {
     const teamIds = team.slots.filter((s): s is number | string => s !== null)
     return eligibleBuffsForTeam(teamIds, configsMap)
   }, [team.slots, configsMap])
 
-  // Computed StatBag merged from all enabled buffs
-  const buffBag = useMemo(() => {
-    const bag: StatBag = {}
-    for (const b of eligibleBuffs) {
-      const key = b.id
-      const explicit = team.buffToggles[key]
-      const on = explicit ?? b.defaultOn
-      if (!on) continue
-      // 'self' buffs only apply if focus IS the source
-      if (b.target === 'self' && focusCharId != b.sourceCharacterId) continue
-      for (const [k, v] of Object.entries(b.bag)) {
-        const sk = k as keyof StatBag
-        if (typeof v === 'number') {
-          bag[sk] = (bag[sk] ?? 0) + v
-        }
-      }
-    }
-    return bag
-  }, [eligibleBuffs, team.buffToggles, focusCharId])
+  /** For each eligible buff, an {spec, on, sourceTalentLevels} entry that the
+   *  zone aggregator consumes. */
+  const buffEvalList = useMemo(() => {
+    return eligibleBuffs.map((spec) => ({
+      spec,
+      on: team.buffToggles[spec.id] ?? spec.defaultOn,
+      sourceTalentLevels: configsMap[String(spec.sourceCharacterId)]?.talentLevels,
+    }))
+  }, [eligibleBuffs, team.buffToggles, configsMap])
 
-  // Compute focus character's damage rows (async because derive fetches weapon detail)
-  const [focusRows, setFocusRows] = useState<{
+  // Compute focus damage rows + substat marginal values
+  const [focusState, setFocusState] = useState<{
     rows: ComputedRow[]
     finalStats: ReturnType<typeof aggregateStats> | null
-  }>({ rows: [], finalStats: null })
-  const [substatValues, setSubstatValues] = useState<
-    Array<{ substat: Substat; absoluteDelta: number; pctDelta: number }>
-  >([])
-
-  const focusConfig = focusCharId != null ? getConfig(focusCharId) : null
-  const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
-  const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
+    substatValues: Array<{ substat: Substat; absoluteDelta: number; pctDelta: number }>
+  }>({ rows: [], finalStats: null, substatValues: [] })
 
   useEffect(() => {
     if (!focusCharId || !focusConfig || !focusMeta || !focusIdx_data) {
-      setFocusRows({ rows: [], finalStats: null })
-      setSubstatValues([])
+      setFocusState({ rows: [], finalStats: null, substatValues: [] })
       return
     }
     let cancelled = false
     deriveConfigStats(focusConfig, focusMeta, focusIdx_data.element)
       .then((derived) => {
         if (cancelled) return
-        const element = normalizeElement(focusIdx_data.element)
-        const baseline = computeRows(focusConfig, focusMeta, derived, element, team, buffBag)
-        setFocusRows(baseline)
-
-        // Substat marginal values
+        const characterElement = normalizeElement(focusIdx_data.element)
+        const baseline = computeFocusRows(focusConfig, focusMeta, derived, characterElement, team, buffEvalList)
         const baselineTotal = baseline.rows.reduce((s, r) => s + r.out.avg, 0)
-        if (baselineTotal === 0) {
-          setSubstatValues([])
-          return
-        }
-        const subValues = ALL_SUBSTATS.map((s) => {
-          const { key, delta } = substatToBag(s)
-          const perturbed: StatBag = { ...buffBag, [key]: (buffBag[key] ?? 0) + delta }
-          const r = computeRows(focusConfig, focusMeta, derived, element, team, perturbed)
-          const newTotal = r.rows.reduce((acc, row) => acc + row.out.avg, 0)
-          return {
-            substat: s,
-            absoluteDelta: newTotal - baselineTotal,
-            pctDelta: ((newTotal - baselineTotal) / baselineTotal) * 100,
-          }
-        }).sort((a, b) => b.absoluteDelta - a.absoluteDelta)
-        setSubstatValues(subValues)
-      })
-      .catch(() => setFocusRows({ rows: [], finalStats: null }))
-    return () => { cancelled = true }
-  }, [focusCharId, focusConfig, focusMeta, focusIdx_data, team, buffBag])
 
-  // Picker: only configured characters
+        let substatValues: Array<{ substat: Substat; absoluteDelta: number; pctDelta: number }> = []
+        if (baselineTotal > 0) {
+          substatValues = ALL_SUBSTATS.map((s) => {
+            const perturbation = substatToBag(s)
+            const r = computeFocusRows(focusConfig, focusMeta, {
+              ...derived,
+              bonusBags: [...derived.bonusBags, perturbation],
+            }, characterElement, team, buffEvalList)
+            const newTotal = r.rows.reduce((acc, row) => acc + row.out.avg, 0)
+            return {
+              substat: s,
+              absoluteDelta: newTotal - baselineTotal,
+              pctDelta: ((newTotal - baselineTotal) / baselineTotal) * 100,
+            }
+          }).sort((a, b) => b.absoluteDelta - a.absoluteDelta)
+        }
+
+        setFocusState({
+          rows: baseline.rows,
+          finalStats: baseline.finalStats,
+          substatValues,
+        })
+      })
+      .catch(() => setFocusState({ rows: [], finalStats: null, substatValues: [] }))
+    return () => { cancelled = true }
+  }, [focusCharId, focusConfig, focusMeta, focusIdx_data, team, buffEvalList])
+
   const configuredCharacters = useMemo(
     () => allCharacters.filter((c) => isConfigured(configsMap[String(c.id)])),
     [allCharacters, configsMap],
@@ -170,7 +215,6 @@ export default function Team() {
         <p className="text-sm text-zinc-500 mt-2">{t('team.v2Hint')}</p>
       </div>
 
-      {/* Team slots */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {team.slots.map((charId, slotIdx) => (
           <SlotCard
@@ -188,7 +232,6 @@ export default function Team() {
         ))}
       </div>
 
-      {/* Enemy + reaction (now on team) */}
       <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 space-y-2">
         <h3 className="text-sm font-semibold">{t('team.enemyAndReaction')}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
@@ -215,7 +258,6 @@ export default function Team() {
         </div>
       </section>
 
-      {/* Received buffs */}
       <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
         <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
           {t('team.buffsTitle')} {focusCharId != null && <span className="text-xs font-normal text-zinc-500">· {t('team.forFocus')}: {focusIdx_data ? displayName(focusIdx_data, locale) : ''}</span>}
@@ -231,7 +273,8 @@ export default function Team() {
                 on={team.buffToggles[b.id] ?? b.defaultOn}
                 onToggle={(on) => toggleBuff(b.id, on)}
                 locale={locale}
-                focusCharId={focusCharId}
+                sourceTalentLevels={configsMap[String(b.sourceCharacterId)]?.talentLevels}
+                t={t}
               />
             ))}
           </div>
@@ -241,13 +284,12 @@ export default function Team() {
         </p>
       </section>
 
-      {/* Focus damage panel */}
-      {focusMeta && focusIdx_data && focusRows.finalStats && (
+      {focusMeta && focusIdx_data && focusState.finalStats && (
         <FocusDamagePanel
           meta={focusMeta}
-          rows={focusRows.rows}
-          finalStats={focusRows.finalStats}
-          substatValues={substatValues}
+          rows={focusState.rows}
+          finalStats={focusState.finalStats}
+          substatValues={focusState.substatValues}
           t={t}
         />
       )}
@@ -256,7 +298,6 @@ export default function Team() {
         <p className="text-sm text-zinc-500">{t('team.pickToBegin')}</p>
       )}
 
-      {/* Picker modal */}
       {pickerSlot !== null && (
         <PickerModal
           query={pickerQuery}
@@ -265,50 +306,40 @@ export default function Team() {
           locale={locale}
           t={t}
           onClose={() => setPickerSlot(null)}
-          onPick={(id) => {
-            setSlot(pickerSlot, id)
-            setPickerSlot(null)
-          }}
+          onPick={(id) => { setSlot(pickerSlot, id); setPickerSlot(null) }}
         />
       )}
     </div>
   )
 }
 
-function computeRows(
+// Per-hit zone-aware damage compute.
+function computeFocusRows(
   config: CharacterConfig,
   meta: CharacterMeta,
-  derived: import('@/data/config-to-stats').DerivedStatsInput,
-  element: DamageElement,
+  derived: DerivedStatsInput,
+  characterElement: DamageElement,
   team: TeamConfig,
-  buffBag: StatBag,
+  buffEvalList: Array<{ spec: BuffSpec; on: boolean; sourceTalentLevels?: { auto: number; skill: number; burst: number } }>,
 ): { rows: ComputedRow[]; finalStats: ReturnType<typeof aggregateStats> } {
+  // Receiver context — TODO read from config.position when we add it.
+  const receiverPosition: Position = 'frontline'
+  const receiverCharacterId = config.characterId
   const reaction = reactionFromPick(team.reaction)
-  const stats = aggregateStats([
-    {
-      atkFlat: derived.baseAtk,
-      hpFlat: derived.baseHp,
-      defFlat: derived.baseDef,
-    },
+  const reactionKind = reactionKindOf(team.reaction)
+
+  // Solo (no team buffs) final stats — useful for the side panel + as baseline.
+  const soloStats = aggregateStats([
+    { atkFlat: derived.baseAtk, hpFlat: derived.baseHp, defFlat: derived.baseDef },
     ...derived.bonusBags,
-    buffBag,
   ])
+
   const baseRes = team.enemyBaseRes / 100
-  const attacker = { level: config.level, stats }
-  const target = {
-    level: team.enemyLevel,
-    resistance: {
-      Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
-      Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
-    },
-    resReduction: {
-      Pyro: team.enemyResReduction / 100, Hydro: team.enemyResReduction / 100,
-      Cryo: team.enemyResReduction / 100, Electro: team.enemyResReduction / 100,
-      Anemo: team.enemyResReduction / 100, Geo: team.enemyResReduction / 100,
-      Dendro: team.enemyResReduction / 100, Physical: team.enemyResReduction / 100,
-    },
-    defReduction: team.enemyDefReduction / 100,
+  const baseResMap = {
+    Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
+    Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
   }
+  const baseResShred = team.enemyResReduction / 100
 
   const rows: ComputedRow[] = []
   const sections: Array<{ role: 'auto' | 'skill' | 'burst'; lvl: number }> = [
@@ -325,31 +356,62 @@ function computeRows(
       if (m == null) continue
       const key = `${role}:${hit.paramIndex}:${hit.label}`
       const scaling = scalingOverride[key] ?? hit.scaling
+      // Filter and aggregate per-hit zone buffs
+      const zones = aggregateZoneBuffs(buffEvalList, {
+        hitElement: characterElement,
+        hitType: hit.hitType,
+        receiverPosition,
+        sourceCharacterId: 0, // overridden by aggregator per part
+        receiverCharacterId,
+        reactionKind,
+      })
+      const ov = zonesToOverrides(zones, characterElement)
+      const perHitStats = aggregateStats([
+        { atkFlat: derived.baseAtk, hpFlat: derived.baseHp, defFlat: derived.baseDef },
+        ...derived.bonusBags,
+        ov.statBagDelta,
+      ])
+      const attacker = { level: config.level, stats: perHitStats }
+      const target = {
+        level: team.enemyLevel,
+        resistance: baseResMap,
+        resReduction: {
+          Pyro: baseResShred + ov.targetResShred, Hydro: baseResShred + ov.targetResShred,
+          Cryo: baseResShred + ov.targetResShred, Electro: baseResShred + ov.targetResShred,
+          Anemo: baseResShred + ov.targetResShred, Geo: baseResShred + ov.targetResShred,
+          Dendro: baseResShred + ov.targetResShred, Physical: baseResShred + ov.targetResShred,
+        },
+        defReduction: team.enemyDefReduction / 100 + ov.targetDefShred,
+        defIgnore: ov.targetDefIgnore,
+      }
       const out = calcDamage(
         attacker,
         target,
-        { label: hit.label, scaling, multiplier: m, element, hitType: hit.hitType },
+        {
+          label: hit.label, scaling, multiplier: m, element: characterElement, hitType: hit.hitType,
+          reactionBonus: ov.hitReactionBonus,
+        },
         reaction,
       )
-      rows.push({ role, hit: { ...hit, scaling }, multiplier: m, out })
+      rows.push({ role, hit: { ...hit, scaling }, multiplier: m, out, appliedZones: zones })
     }
   }
-  return { rows, finalStats: stats }
+  return { rows, finalStats: soloStats }
 }
 
-function substatToBag(substat: Substat): { key: keyof StatBag; delta: number } {
+function substatToBag(substat: Substat): StatBag {
   const roll = MAX_ROLL_VALUES[substat]
   switch (substat) {
-    case 'critRate': return { key: 'critRate', delta: roll }
-    case 'critDmg': return { key: 'critDmg', delta: roll }
-    case 'atkPct': return { key: 'atkPct', delta: roll }
-    case 'hpPct': return { key: 'hpPct', delta: roll }
-    case 'defPct': return { key: 'defPct', delta: roll }
-    case 'em': return { key: 'em', delta: roll }
-    case 'er': return { key: 'er', delta: roll }
-    case 'atkFlat': return { key: 'atkFlat', delta: roll }
-    case 'hpFlat': return { key: 'hpFlat', delta: roll }
-    case 'defFlat': return { key: 'defFlat', delta: roll }
+    case 'critRate': return { critRate: roll }
+    case 'critDmg': return { critDmg: roll }
+    case 'atkPct': return { atkPct: roll }
+    case 'hpPct': return { hpPct: roll }
+    case 'defPct': return { defPct: roll }
+    case 'em': return { em: roll }
+    case 'er': return { er: roll }
+    case 'atkFlat': return { atkFlat: roll }
+    case 'hpFlat': return { hpFlat: roll }
+    case 'defFlat': return { defFlat: roll }
   }
 }
 
@@ -381,10 +443,7 @@ function SlotCard({
   return (
     <div className={`rounded-lg border bg-white dark:bg-zinc-900 overflow-hidden ${isFocus ? 'border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30' : 'border-zinc-200 dark:border-zinc-800'}`}>
       <div className="flex items-center gap-3 p-3">
-        <div
-          className="w-12 h-12 rounded-md overflow-hidden flex-shrink-0"
-          style={{ background: `linear-gradient(180deg, ${ELEMENT_COLOR[idx.element] ?? '#888'}33, transparent)` }}
-        >
+        <div className="w-12 h-12 rounded-md overflow-hidden flex-shrink-0" style={{ background: `linear-gradient(180deg, ${ELEMENT_COLOR[idx.element] ?? '#888'}33, transparent)` }}>
           <img src={iconUrl(idx.icon)} alt={displayName(idx, locale)} className="w-full h-full object-cover" />
         </div>
         <div className="min-w-0 flex-1">
@@ -393,9 +452,7 @@ function SlotCard({
             {t(`element.${idx.element}`)} · C{config?.constellation ?? 0}
           </div>
         </div>
-        <button onClick={onClear} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-sm" title={t('team.clearSlot')}>
-          ✕
-        </button>
+        <button onClick={onClear} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-sm" title={t('team.clearSlot')}>✕</button>
       </div>
       <button
         onClick={onFocus}
@@ -428,19 +485,16 @@ function NumberCell({
 }
 
 function BuffRow({
-  buff, on, onToggle, locale, focusCharId,
+  buff, on, onToggle, locale, sourceTalentLevels, t,
 }: {
   buff: BuffSpec
   on: boolean
   onToggle: (on: boolean) => void
   locale: 'zh' | 'en'
-  focusCharId: number | string | null
+  sourceTalentLevels?: { auto: number; skill: number; burst: number }
+  t: (k: string, f?: string) => string
 }) {
   const source = getCharacterIndex(buff.sourceCharacterId)
-  // For 'self' buffs, hide if the focus is NOT the source
-  if (buff.target === 'self' && focusCharId != buff.sourceCharacterId) {
-    return null
-  }
   return (
     <label className="flex items-start gap-3 px-4 py-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
       <input
@@ -451,22 +505,32 @@ function BuffRow({
       />
       <div className="flex-1 min-w-0">
         <div className="text-sm flex items-center gap-2">
-          {source && (
-            <img
-              src={iconUrl(source.icon)}
-              alt=""
-              className="w-5 h-5 rounded inline-block flex-shrink-0"
-            />
-          )}
+          {source && <img src={iconUrl(source.icon)} alt="" className="w-5 h-5 rounded inline-block flex-shrink-0" />}
           <span className="font-medium">{buff.label[locale]}</span>
-          <span className="text-xs text-zinc-500">
-            {buff.target === 'self' ? '· self only' : ''}
-          </span>
         </div>
         <p className="text-xs text-zinc-500 mt-0.5">{buff.description[locale]}</p>
+        <div className="text-[10px] text-zinc-400 mt-1 flex flex-wrap gap-1.5">
+          {buff.parts.map((p, i) => (
+            <span key={i} className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">
+              {p.zone} · {formatPartValue(buff, i, sourceTalentLevels)}
+              {p.cond?.element && ` · ${t(`element.${p.cond.element}`)}`}
+              {p.cond?.hitType && ` · ${p.cond.hitType.join('/')}`}
+              {p.cond?.selfOnly && ' · self'}
+            </span>
+          ))}
+        </div>
       </div>
     </label>
   )
+}
+
+function formatPartValue(spec: BuffSpec, idx: number, talents?: { auto: number; skill: number; burst: number }): string {
+  const v = partValue(spec, idx, talents)
+  const zone = spec.parts[idx].zone
+  if (zone === 'em' || zone === 'baseAtkFlat' || zone === 'baseHpFlat' || zone === 'baseDefFlat' || zone === 'additiveFlat') {
+    return `+${v.toFixed(0)}`
+  }
+  return `+${(v * 100).toFixed(1)}%`
 }
 
 function PickerModal({
@@ -486,48 +550,23 @@ function PickerModal({
     return displayName(c, locale).toLowerCase().includes(q) || c.route.toLowerCase().includes(q)
   })
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-3">
-          <input
-            type="search"
-            placeholder={t('characters.searchPlaceholder')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
-            autoFocus
-          />
-          <button onClick={onClose} className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-            ✕
-          </button>
+          <input type="search" placeholder={t('characters.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm" autoFocus />
+          <button onClick={onClose} className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           {filtered.length === 0 ? (
             <div className="text-sm text-zinc-500 text-center py-8">
-              {t('team.noConfiguredCharacters')}
-              <br />
-              <Link to="/characters" className="text-blue-600 hover:underline">
-                {t('team.goConfigureLink')}
-              </Link>
+              {t('team.noConfiguredCharacters')}<br />
+              <Link to="/characters" className="text-blue-600 hover:underline">{t('team.goConfigureLink')}</Link>
             </div>
           ) : (
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
               {filtered.map((c) => (
-                <button
-                  key={String(c.id)}
-                  onClick={() => onPick(c.id)}
-                  className="group rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2 text-center hover:border-zinc-400"
-                >
-                  <div
-                    className="aspect-square rounded overflow-hidden mb-1"
-                    style={{ background: `linear-gradient(180deg, ${ELEMENT_COLOR[c.element] ?? '#888'}33, transparent)` }}
-                  >
+                <button key={String(c.id)} onClick={() => onPick(c.id)} className="group rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2 text-center hover:border-zinc-400">
+                  <div className="aspect-square rounded overflow-hidden mb-1" style={{ background: `linear-gradient(180deg, ${ELEMENT_COLOR[c.element] ?? '#888'}33, transparent)` }}>
                     <img src={iconUrl(c.icon)} alt={displayName(c, locale)} loading="lazy" className="w-full h-full object-cover" />
                   </div>
                   <div className="text-xs font-medium truncate">{displayName(c, locale)}</div>
@@ -587,8 +626,8 @@ function FocusDamagePanel({
               <thead className="text-xs text-zinc-500 bg-zinc-50/50 dark:bg-zinc-900/50">
                 <tr>
                   <th className="text-left px-4 py-2 font-normal">{t('damage.skill')}</th>
-                  <th className="text-left px-2 py-2 font-normal w-24">{t('damage.multiplier')}</th>
-                  <th className="text-left px-2 py-2 font-normal w-24">{t('damage.scaling')}</th>
+                  <th className="text-left px-2 py-2 font-normal w-20">{t('damage.multiplier')}</th>
+                  <th className="text-left px-2 py-2 font-normal w-16">{t('damage.scaling')}</th>
                   <th className="text-right px-2 py-2 font-normal">{t('damage.nonCrit')}</th>
                   <th className="text-right px-2 py-2 font-normal">{t('damage.crit')}</th>
                   <th className="text-right px-4 py-2 font-normal">{t('damage.avg')}</th>
@@ -616,6 +655,9 @@ function FocusDamagePanel({
           <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
             {t('substat.title')}
           </h3>
+          <div className="px-4 py-2 text-xs text-zinc-500 border-b border-zinc-100 dark:border-zinc-800">
+            {t('substat.hintV2')}
+          </div>
           <table className="w-full text-sm">
             <tbody>
               {substatValues.map((s, i) => {

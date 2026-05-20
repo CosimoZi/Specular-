@@ -158,6 +158,7 @@ export const DICT: Record<Locale, Record<string, string>> = {
 
     'substat.title': '副词条边际收益',
     'substat.hint': '为当前 build 增加 1 颗满档副词条后总伤害的提升。横条越长收益越高。',
+    'substat.hintV2': '在当前队伍 + 反应 + 启用的 buff 下，给 focus 角色再多 1 颗满档副词条带来的总伤提升。',
     'substat.substat': '副词条',
     'substat.bar': '相对收益',
     'substat.absDelta': '绝对增幅',
@@ -399,6 +400,8 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'substat.title': 'Substat marginal value',
     'substat.hint':
       'Total damage gain from adding one max-roll substat to the current build. Longer bar = bigger gain.',
+    'substat.hintV2':
+      "With the current team + reaction + enabled buffs, this shows how much one extra max-roll substat would add to focus's total damage.",
     'substat.substat': 'Substat',
     'substat.bar': 'Relative gain',
     'substat.absDelta': 'Abs Δ',
