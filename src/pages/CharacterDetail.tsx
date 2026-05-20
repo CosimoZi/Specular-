@@ -8,99 +8,22 @@ import {
   type CharacterMeta,
   type ExtractedHit,
 } from '@/data/meta'
-import {
-  computeBaseStats,
-  computeAscensionBonus,
-  defaultAscensionFor,
-  MAX_LEVEL_BY_ASCENSION,
-} from '@/data/character-stats'
+import { deriveConfigStats, type DerivedStatsInput } from '@/data/config-to-stats'
 import {
   aggregateStats,
   calcDamage,
   type DamageElement,
   type Reaction,
-  type StatBag,
 } from '@/engine'
-import {
-  ALL_SUBSTATS,
-  MAX_ROLL_VALUES,
-  type Substat,
-} from '@/engine/substat'
+import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
 import { useImportedBuilds } from '@/store/imported-builds'
+import { useCharacterConfigs } from '@/store/character-configs'
+import { type CharacterConfig } from '@/data/config-types'
+import ConfigPanel from '@/components/ConfigPanel'
 
-interface BuildForm {
-  // Character base
-  charLevel: number
-  ascensionStage: number // 0..6; auto-tracks level by default
-  // Manual override for base stats (if user disables auto-compute)
-  manualBase: boolean
-  baseAtkOverride: number
-  baseHpOverride: number
-  baseDefOverride: number
-  // Bonuses from weapon + artifact + buffs (sum of everything that's not character base)
-  atkFlat: number // flat ATK from weapon + flowers + buffs
-  atkPct: number // %ATK from artifacts + buffs (0-100 in form, /100 when used)
-  hpFlat: number
-  hpPct: number
-  defFlat: number
-  defPct: number
-  em: number // flat EM from substats etc.
-  critRate: number // %, on top of 5% baseline
-  critDmg: number // %, on top of 50% baseline
-  erBonus: number // % on top of 100% baseline
-  elementBonus: number // % element-matched DMG
-  // Talent levels
-  autoLvl: number
-  skillLvl: number
-  burstLvl: number
-  // Enemy
-  enemyLevel: number
-  enemyRes: number
-  resReduction: number
-  defReduction: number
-  reaction: ReactionPick
-}
-
-type ReactionPick =
-  | 'none'
-  | 'vape_strong'
-  | 'vape_weak'
-  | 'melt_strong'
-  | 'melt_weak'
-  | 'aggravate'
-  | 'spread'
-
-const DEFAULTS: BuildForm = {
-  charLevel: 90,
-  ascensionStage: 6,
-  manualBase: false,
-  baseAtkOverride: 0,
-  baseHpOverride: 0,
-  baseDefOverride: 0,
-  atkFlat: 600, // typical 5* weapon base ATK + artifact flat
-  atkPct: 60,
-  hpFlat: 4780, // typical flower main stat
-  hpPct: 0,
-  defFlat: 0,
-  defPct: 0,
-  em: 100,
-  critRate: 65, // 70% total with 5% baseline (matches the old default of 70)
-  critDmg: 100, // 150% total
-  erBonus: 30, // 130% total
-  elementBonus: 46.6,
-  autoLvl: 10,
-  skillLvl: 10,
-  burstLvl: 10,
-  enemyLevel: 100,
-  enemyRes: 10,
-  resReduction: 0,
-  defReduction: 0,
-  reaction: 'none',
-}
-
-function reactionFromPick(pick: ReactionPick): Reaction {
+function reactionFromPick(pick: CharacterConfig['reaction']): Reaction {
   switch (pick) {
     case 'vape_strong': return { kind: 'vape', trigger: 'pyro_on_hydro' }
     case 'vape_weak': return { kind: 'vape', trigger: 'hydro_on_pyro' }
@@ -120,71 +43,45 @@ type ComputedRow = {
   out: ReturnType<typeof calcDamage>
 }
 
-/** Run the full damage calc for a given form. Pure function so we can call it
- *  many times for substat valuation. */
-function computeBuildRows(
-  form: BuildForm,
+/** Run the full damage calc using already-derived stats input. Synchronous. */
+function computeRowsFromDerived(
+  config: CharacterConfig,
   meta: CharacterMeta,
-  autoBase: { hp: number; atk: number; def: number },
-  ascensionBonusBag: StatBag,
+  derived: DerivedStatsInput,
   element: DamageElement,
   scalingOverride: Record<string, 'atk' | 'hp' | 'def' | 'em'>,
 ): { rows: ComputedRow[]; finalStats: ReturnType<typeof aggregateStats> } {
-  const baseAtk = form.manualBase ? form.baseAtkOverride : autoBase.atk
-  const baseHp = form.manualBase ? form.baseHpOverride : autoBase.hp
-  const baseDef = form.manualBase ? form.baseDefOverride : autoBase.def
-  const reaction = reactionFromPick(form.reaction)
-
+  const reaction = reactionFromPick(config.reaction)
   const stats = aggregateStats([
     {
-      atkFlat: baseAtk,
-      hpFlat: baseHp,
-      defFlat: baseDef,
+      atkFlat: derived.baseAtk,
+      hpFlat: derived.baseHp,
+      defFlat: derived.baseDef,
     },
-    form.manualBase ? {} : ascensionBonusBag,
-    {
-      atkFlat: form.atkFlat,
-      atkPct: form.atkPct / 100,
-      hpFlat: form.hpFlat,
-      hpPct: form.hpPct / 100,
-      defFlat: form.defFlat,
-      defPct: form.defPct / 100,
-      em: form.em,
-      critRate: form.critRate / 100,
-      critDmg: form.critDmg / 100,
-      er: form.erBonus / 100,
-      pyroDmg: element === 'Pyro' ? form.elementBonus / 100 : 0,
-      hydroDmg: element === 'Hydro' ? form.elementBonus / 100 : 0,
-      cryoDmg: element === 'Cryo' ? form.elementBonus / 100 : 0,
-      electroDmg: element === 'Electro' ? form.elementBonus / 100 : 0,
-      anemoDmg: element === 'Anemo' ? form.elementBonus / 100 : 0,
-      geoDmg: element === 'Geo' ? form.elementBonus / 100 : 0,
-      dendroDmg: element === 'Dendro' ? form.elementBonus / 100 : 0,
-      physicalDmg: element === 'Physical' ? form.elementBonus / 100 : 0,
-    },
+    ...derived.bonusBags,
   ])
-  const baseRes = form.enemyRes / 100
-  const attacker = { level: form.charLevel, stats }
+  const baseRes = config.enemyBaseRes / 100
+  const attacker = { level: config.level, stats }
   const target = {
-    level: form.enemyLevel,
+    level: config.enemyLevel,
     resistance: {
       Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
       Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
     },
     resReduction: {
-      Pyro: form.resReduction / 100, Hydro: form.resReduction / 100,
-      Cryo: form.resReduction / 100, Electro: form.resReduction / 100,
-      Anemo: form.resReduction / 100, Geo: form.resReduction / 100,
-      Dendro: form.resReduction / 100, Physical: form.resReduction / 100,
+      Pyro: config.enemyResReduction / 100, Hydro: config.enemyResReduction / 100,
+      Cryo: config.enemyResReduction / 100, Electro: config.enemyResReduction / 100,
+      Anemo: config.enemyResReduction / 100, Geo: config.enemyResReduction / 100,
+      Dendro: config.enemyResReduction / 100, Physical: config.enemyResReduction / 100,
     },
-    defReduction: form.defReduction / 100,
+    defReduction: config.enemyDefReduction / 100,
   }
 
   const rows: ComputedRow[] = []
   const sections: Array<{ role: 'auto' | 'skill' | 'burst'; lvl: number }> = [
-    { role: 'auto', lvl: form.autoLvl },
-    { role: 'skill', lvl: form.skillLvl },
-    { role: 'burst', lvl: form.burstLvl },
+    { role: 'auto', lvl: config.talentLevels.auto },
+    { role: 'skill', lvl: config.talentLevels.skill },
+    { role: 'burst', lvl: config.talentLevels.burst },
   ]
   for (const { role, lvl } of sections) {
     const tlt = meta.talents[role]
@@ -206,21 +103,22 @@ function computeBuildRows(
   return { rows, finalStats: stats }
 }
 
-/** For a substat, return the form-field name and the value-delta corresponding
- *  to one max roll. */
-function substatToFormDelta(substat: Substat): { field: keyof BuildForm; delta: number } {
+/** Map a Substat → (form-bag-field, scaled delta value). Used for substat valuation. */
+function substatToBagPerturb(
+  substat: Substat,
+): { key: string; delta: number } {
   const roll = MAX_ROLL_VALUES[substat]
   switch (substat) {
-    case 'critRate': return { field: 'critRate', delta: roll * 100 }
-    case 'critDmg': return { field: 'critDmg', delta: roll * 100 }
-    case 'atkPct': return { field: 'atkPct', delta: roll * 100 }
-    case 'hpPct': return { field: 'hpPct', delta: roll * 100 }
-    case 'defPct': return { field: 'defPct', delta: roll * 100 }
-    case 'em': return { field: 'em', delta: roll }
-    case 'er': return { field: 'erBonus', delta: roll * 100 }
-    case 'atkFlat': return { field: 'atkFlat', delta: roll }
-    case 'hpFlat': return { field: 'hpFlat', delta: roll }
-    case 'defFlat': return { field: 'defFlat', delta: roll }
+    case 'critRate': return { key: 'critRate', delta: roll }
+    case 'critDmg': return { key: 'critDmg', delta: roll }
+    case 'atkPct': return { key: 'atkPct', delta: roll }
+    case 'hpPct': return { key: 'hpPct', delta: roll }
+    case 'defPct': return { key: 'defPct', delta: roll }
+    case 'em': return { key: 'em', delta: roll }
+    case 'er': return { key: 'er', delta: roll }
+    case 'atkFlat': return { key: 'atkFlat', delta: roll }
+    case 'hpFlat': return { key: 'hpFlat', delta: roll }
+    case 'defFlat': return { key: 'defFlat', delta: roll }
   }
 }
 
@@ -231,12 +129,16 @@ export default function CharacterDetail() {
   const idx = id ? getCharacterIndex(id) : undefined
   const [meta, setMeta] = useState<CharacterMeta | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [form, setForm] = useState<BuildForm>(DEFAULTS)
+  const [derived, setDerived] = useState<DerivedStatsInput | null>(null)
   const [scalingOverride, setScalingOverride] = useState<
     Record<string, 'atk' | 'hp' | 'def' | 'em'>
   >({})
+
+  const config = useCharacterConfigs((s) => (id ? s.get(id) : null))
+  const patch = useCharacterConfigs((s) => s.patch)
   const importedBuild = useImportedBuilds((s) => (id ? s.get(id) : undefined))
 
+  // Load meta
   useEffect(() => {
     if (!id) return
     setMeta(null)
@@ -246,89 +148,60 @@ export default function CharacterDetail() {
       .catch((e) => setLoadError(e.message))
   }, [id])
 
-  // When the user lands on this page from /uid import, pre-fill the form with
-  // their actual character build. Enka's fightPropMap gives FINAL stats with
-  // weapon + artifacts + ascension all baked in, so we treat them as the
-  // "base" and skip the ascension-stat bonus to avoid double-counting.
+  // When a UID import comes in, apply it as importMode snapshot to the config
   useEffect(() => {
-    if (!importedBuild) return
-    const b = importedBuild
-    const elem = idx ? normalizeElement(idx.element) : 'Physical'
-    const elemDmg = b.elementalDmg[elem] ?? 0
-    setForm((prev) => ({
-      ...prev,
-      charLevel: b.characterLevel,
-      ascensionStage: b.ascensionStage,
-      manualBase: true,
-      baseAtkOverride: b.finalAtk,
-      baseHpOverride: b.finalHp,
-      baseDefOverride: b.finalDef,
-      atkFlat: 0,
-      atkPct: 0,
-      hpFlat: 0,
-      hpPct: 0,
-      defFlat: 0,
-      defPct: 0,
-      em: b.em,
-      critRate: Math.max(b.critRate - 5, 0), // dict already adds 5% baseline
-      critDmg: Math.max(b.critDmg - 50, 0),
-      erBonus: Math.max(b.er - 100, 0),
-      elementBonus: elemDmg,
-      autoLvl: b.talentLevels.auto,
-      skillLvl: b.talentLevels.skill,
-      burstLvl: b.talentLevels.burst,
-    }))
-  }, [importedBuild, idx])
-
-  // Auto-sync ascensionStage with charLevel unless user has manually changed it.
-  // We keep a simple invariant: if level allows a higher stage, but stage hasn't
-  // been bumped up, bump it. We don't override a user who explicitly set a
-  // higher stage at a lower level (sub-level overlevelling is valid).
-  useEffect(() => {
-    setForm((f) => {
-      const minStage = defaultAscensionFor(f.charLevel)
-      if (f.ascensionStage < minStage) return { ...f, ascensionStage: minStage }
-      // Also cap level to ascension's allowed maximum (in-game ceiling).
-      const cap = MAX_LEVEL_BY_ASCENSION[f.ascensionStage] ?? 90
-      if (f.charLevel > cap) return { ...f, charLevel: cap }
-      return f
+    if (!importedBuild || !id || !idx) return
+    const elem = normalizeElement(idx.element)
+    const elemDmg = importedBuild.elementalDmg[elem] ?? 0
+    patch(id, {
+      level: importedBuild.characterLevel,
+      ascensionStage: importedBuild.ascensionStage,
+      talentLevels: importedBuild.talentLevels,
+      importMode: {
+        finalAtk: importedBuild.finalAtk,
+        finalHp: importedBuild.finalHp,
+        finalDef: importedBuild.finalDef,
+        em: importedBuild.em,
+        critRate: importedBuild.critRate,
+        critDmg: importedBuild.critDmg,
+        er: importedBuild.er,
+        elementBonus: elemDmg,
+      },
     })
-  }, [form.charLevel, form.ascensionStage])
+  }, [importedBuild, id, idx, patch])
+
+  // Derive stats from config (async — fetches weapon detail + set bonuses)
+  useEffect(() => {
+    if (!meta || !config || !idx) {
+      setDerived(null)
+      return
+    }
+    let cancelled = false
+    deriveConfigStats(config, meta, idx.element)
+      .then((d) => { if (!cancelled) setDerived(d) })
+      .catch(() => { if (!cancelled) setDerived(null) })
+    return () => { cancelled = true }
+  }, [meta, config, idx])
 
   const element: DamageElement = idx ? normalizeElement(idx.element) : 'Physical'
 
-  // Auto-computed base stats from level + ascension
-  const autoBase = useMemo(() => {
-    if (!meta) return { hp: 0, atk: 0, def: 0 }
-    return computeBaseStats(meta, form.charLevel, form.ascensionStage)
-  }, [meta, form.charLevel, form.ascensionStage])
+  const rowsResult = useMemo(() => {
+    if (!meta || !config || !derived) return { rows: [] as ComputedRow[], finalStats: null as ReturnType<typeof aggregateStats> | null }
+    return computeRowsFromDerived(config, meta, derived, element, scalingOverride)
+  }, [meta, config, derived, element, scalingOverride])
 
-  const ascensionBonusBag: StatBag = useMemo(() => {
-    if (!meta) return {}
-    return computeAscensionBonus(meta, form.ascensionStage)
-  }, [meta, form.ascensionStage])
-
-  // Compute final stats by aggregating: char base + ascension bonus + form bonuses.
-  const rows = useMemo(() => {
-    if (!meta) {
-      return {
-        rows: [] as ComputedRow[],
-        finalStats: null as ReturnType<typeof aggregateStats> | null,
-      }
-    }
-    return computeBuildRows(form, meta, autoBase, ascensionBonusBag, element, scalingOverride)
-  }, [meta, form, element, scalingOverride, autoBase, ascensionBonusBag])
-
-  // Substat marginal-value: for each substat type, add +1 max roll to the form
-  // and recompute total avg damage. Sort by delta.
   const substatValues = useMemo(() => {
-    if (!meta) return []
-    const baselineTotal = rows.rows.reduce((acc, r) => acc + r.out.avg, 0)
+    if (!meta || !config || !derived) return []
+    const baselineTotal = rowsResult.rows.reduce((acc, r) => acc + r.out.avg, 0)
     if (baselineTotal === 0) return []
     return ALL_SUBSTATS.map((s) => {
-      const { field, delta } = substatToFormDelta(s)
-      const perturbed = { ...form, [field]: (form[field] as number) + delta }
-      const r = computeBuildRows(perturbed, meta, autoBase, ascensionBonusBag, element, scalingOverride)
+      const { key, delta } = substatToBagPerturb(s)
+      // Append a perturbation bag to the bonus list
+      const perturbedDerived: DerivedStatsInput = {
+        ...derived,
+        bonusBags: [...derived.bonusBags, { [key]: delta }],
+      }
+      const r = computeRowsFromDerived(config, meta, perturbedDerived, element, scalingOverride)
       const newTotal = r.rows.reduce((acc, row) => acc + row.out.avg, 0)
       return {
         substat: s,
@@ -336,7 +209,7 @@ export default function CharacterDetail() {
         pctDelta: ((newTotal - baselineTotal) / baselineTotal) * 100,
       }
     }).sort((a, b) => b.absoluteDelta - a.absoluteDelta)
-  }, [rows.rows, form, meta, autoBase, ascensionBonusBag, element, scalingOverride])
+  }, [meta, config, derived, element, scalingOverride, rowsResult.rows])
 
   if (!idx) {
     return (
@@ -377,29 +250,35 @@ export default function CharacterDetail() {
         </Link>
       </div>
 
-      {loadError && (
-        <div className="text-red-600 text-sm">
-          {t('detail.loadError')}{loadError}
+      {config?.importMode && (
+        <div className="rounded-md border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs flex items-center justify-between">
+          <span>
+            <strong>{t('config.importedTag')}</strong> · {t('config.importedNote')}
+          </span>
+          <button
+            onClick={() => id && patch(id, { importMode: undefined })}
+            className="text-emerald-700 dark:text-emerald-400 underline hover:no-underline"
+          >
+            {t('config.clearImport')}
+          </button>
         </div>
+      )}
+
+      {loadError && (
+        <div className="text-red-600 text-sm">{t('detail.loadError')}{loadError}</div>
       )}
       {!meta && !loadError && (
         <div className="text-zinc-500 text-sm">{t('detail.loading')}</div>
       )}
 
-      {meta && (
-        <div className="grid lg:grid-cols-[360px_1fr] gap-6">
-          <BuildPanel
-            form={form}
-            setForm={setForm}
-            element={element}
-            autoBase={autoBase}
-            ascensionBonusBag={ascensionBonusBag}
-            t={t}
-          />
+      {meta && id && config && (
+        <div className="grid lg:grid-cols-[380px_1fr] gap-6">
+          <ConfigPanel characterId={id} weaponType={idx.weaponType} />
           <div className="space-y-6">
             <DamagePanel
               meta={meta}
-              rows={rows.rows}
+              rows={rowsResult.rows}
+              finalStats={rowsResult.finalStats}
               scalingOverride={scalingOverride}
               setScalingOverride={setScalingOverride}
               t={t}
@@ -414,172 +293,18 @@ export default function CharacterDetail() {
   )
 }
 
-function BuildPanel({
-  form,
-  setForm,
-  element,
-  autoBase,
-  ascensionBonusBag,
-  t,
-}: {
-  form: BuildForm
-  setForm: (next: BuildForm) => void
-  element: DamageElement
-  autoBase: { hp: number; atk: number; def: number }
-  ascensionBonusBag: StatBag
-  t: (key: string, fallback?: string) => string
-}) {
-  const upd = (k: keyof BuildForm, v: number | string | boolean) =>
-    setForm({ ...form, [k]: v as never })
-  const ascensionStages = [0, 1, 2, 3, 4, 5, 6]
-
-  return (
-    <div className="space-y-4">
-      <section>
-        <h3 className="text-sm font-semibold mb-2">{t('detail.section.charLevel')}</h3>
-        <NumberRow label={t('player.charLevel')} value={form.charLevel} step={1} min={1} max={90} onChange={(v) => upd('charLevel', v)} />
-        <label className="block text-xs text-zinc-500 mt-2 mb-1">{t('player.ascensionStage')}</label>
-        <select
-          value={form.ascensionStage}
-          onChange={(e) => upd('ascensionStage', parseInt(e.target.value, 10))}
-          className="w-full px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
-        >
-          {ascensionStages.map((s) => (
-            <option key={s} value={s}>
-              {t('player.stage')} {s} (≤{MAX_LEVEL_BY_ASCENSION[s]})
-            </option>
-          ))}
-        </select>
-        {!form.manualBase && (
-          <>
-            <p className="text-xs text-zinc-500 mt-2">
-              {t('player.autoBase')}: ATK <strong>{Math.round(autoBase.atk)}</strong> · HP <strong>{Math.round(autoBase.hp)}</strong> · DEF <strong>{Math.round(autoBase.def)}</strong>
-            </p>
-            {Object.keys(ascensionBonusBag).length > 0 && (
-              <p className="text-xs text-zinc-500 mt-1">
-                {t('player.ascensionBonus')}:{' '}
-                {Object.entries(ascensionBonusBag)
-                  .map(([k, v]) => `${k}: ${typeof v === 'number' && v < 1 ? `${(v * 100).toFixed(1)}%` : v}`)
-                  .join(', ')}
-              </p>
-            )}
-          </>
-        )}
-        <label className="flex items-center gap-2 text-xs mt-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.manualBase}
-            onChange={(e) => upd('manualBase', e.target.checked)}
-          />
-          <span>{t('build.manualBase')}</span>
-        </label>
-        {form.manualBase && (
-          <div className="mt-2 pl-5 space-y-0.5">
-            <NumberRow label="Base ATK" value={form.baseAtkOverride} step={50} onChange={(v) => upd('baseAtkOverride', v)} />
-            <NumberRow label="Base HP" value={form.baseHpOverride} step={500} onChange={(v) => upd('baseHpOverride', v)} />
-            <NumberRow label="Base DEF" value={form.baseDefOverride} step={50} onChange={(v) => upd('baseDefOverride', v)} />
-            <p className="text-[10px] text-zinc-500 mt-1">{t('build.manualBaseHint')}</p>
-          </div>
-        )}
-      </section>
-      <section>
-        <h3 className="text-sm font-semibold mb-2">{t('detail.section.weaponArtifact')}</h3>
-        <NumberRow label={t('stat.atkFlat')} value={form.atkFlat} step={50} onChange={(v) => upd('atkFlat', v)} />
-        <NumberRow label={t('stat.atkPct')} value={form.atkPct} step={5} onChange={(v) => upd('atkPct', v)} />
-        <NumberRow label={t('stat.hpFlat')} value={form.hpFlat} step={500} onChange={(v) => upd('hpFlat', v)} />
-        <NumberRow label={t('stat.hpPct')} value={form.hpPct} step={5} onChange={(v) => upd('hpPct', v)} />
-        <NumberRow label={t('stat.defFlat')} value={form.defFlat} step={20} onChange={(v) => upd('defFlat', v)} />
-        <NumberRow label={t('stat.defPct')} value={form.defPct} step={5} onChange={(v) => upd('defPct', v)} />
-        <NumberRow label={t('stat.em')} value={form.em} step={20} onChange={(v) => upd('em', v)} />
-        <NumberRow label={t('stat.critRate')} value={form.critRate} step={5} onChange={(v) => upd('critRate', v)} />
-        <NumberRow label={t('stat.critDmg')} value={form.critDmg} step={10} onChange={(v) => upd('critDmg', v)} />
-        <NumberRow label={t('stat.erBonus')} value={form.erBonus} step={5} onChange={(v) => upd('erBonus', v)} />
-        <NumberRow
-          label={`${t(`element.${element}`)}${t('stat.elementBonus')}`}
-          value={form.elementBonus}
-          step={5}
-          onChange={(v) => upd('elementBonus', v)}
-        />
-      </section>
-      <section>
-        <h3 className="text-sm font-semibold mb-2">{t('detail.section.talentLevels')}</h3>
-        <NumberRow label={t('talent.normal')} value={form.autoLvl} step={1} min={1} max={15} onChange={(v) => upd('autoLvl', v)} />
-        <NumberRow label={t('talent.skill')} value={form.skillLvl} step={1} min={1} max={15} onChange={(v) => upd('skillLvl', v)} />
-        <NumberRow label={t('talent.burst')} value={form.burstLvl} step={1} min={1} max={15} onChange={(v) => upd('burstLvl', v)} />
-      </section>
-      <section>
-        <h3 className="text-sm font-semibold mb-2">{t('detail.section.enemy')}</h3>
-        <NumberRow label={t('enemy.level')} value={form.enemyLevel} step={5} min={1} max={110} onChange={(v) => upd('enemyLevel', v)} />
-        <NumberRow label={t('enemy.baseRes')} value={form.enemyRes} step={5} onChange={(v) => upd('enemyRes', v)} />
-        <NumberRow label={t('enemy.resReduction')} value={form.resReduction} step={5} onChange={(v) => upd('resReduction', v)} />
-        <NumberRow label={t('enemy.defReduction')} value={form.defReduction} step={5} onChange={(v) => upd('defReduction', v)} />
-      </section>
-      <section>
-        <h3 className="text-sm font-semibold mb-2">{t('reaction.label')}</h3>
-        <select
-          value={form.reaction}
-          onChange={(e) => upd('reaction', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
-        >
-          <option value="none">{t('reaction.none')}</option>
-          <option value="vape_strong">{t('reaction.vape_strong')}</option>
-          <option value="vape_weak">{t('reaction.vape_weak')}</option>
-          <option value="melt_strong">{t('reaction.melt_strong')}</option>
-          <option value="melt_weak">{t('reaction.melt_weak')}</option>
-          <option value="aggravate">{t('reaction.aggravate')}</option>
-          <option value="spread">{t('reaction.spread')}</option>
-        </select>
-      </section>
-    </div>
-  )
-}
-
-function NumberRow({
-  label, value, step = 1, min, max, onChange,
-}: {
-  label: string
-  value: number
-  step?: number
-  min?: number
-  max?: number
-  onChange: (n: number) => void
-}) {
-  return (
-    <label className="flex items-center justify-between gap-2 text-sm py-1">
-      <span className="text-zinc-600 dark:text-zinc-400">{label}</span>
-      <input
-        type="number"
-        value={value}
-        step={step}
-        min={min}
-        max={max}
-        onChange={(e) => {
-          const n = parseFloat(e.target.value)
-          if (!Number.isNaN(n)) onChange(n)
-        }}
-        className="w-24 px-2 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right text-sm"
-      />
-    </label>
-  )
-}
-
 function DamagePanel({
-  meta, rows, scalingOverride, setScalingOverride, t,
+  meta, rows, finalStats, scalingOverride, setScalingOverride, t,
 }: {
   meta: CharacterMeta
-  rows: Array<{
-    role: 'auto' | 'skill' | 'burst'
-    lvl: number
-    hit: ExtractedHit
-    multiplier: number
-    out: ReturnType<typeof calcDamage>
-  }>
+  rows: ComputedRow[]
+  finalStats: ReturnType<typeof aggregateStats> | null
   scalingOverride: Record<string, 'atk' | 'hp' | 'def' | 'em'>
   setScalingOverride: (s: Record<string, 'atk' | 'hp' | 'def' | 'em'>) => void
   t: (key: string, fallback?: string) => string
 }) {
   const groups = useMemo(() => {
-    const g: Record<string, typeof rows> = { auto: [], skill: [], burst: [] }
+    const g: Record<string, ComputedRow[]> = { auto: [], skill: [], burst: [] }
     for (const r of rows) g[r.role].push(r)
     return g
   }, [rows])
@@ -593,6 +318,16 @@ function DamagePanel({
 
   return (
     <div className="space-y-4">
+      {finalStats && (
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3 bg-zinc-50/50 dark:bg-zinc-900/50 text-sm grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <FinalStat label={t('stat.atk')} value={fmt(finalStats.atk)} />
+          <FinalStat label={t('stat.hp')} value={fmt(finalStats.hp)} />
+          <FinalStat label={t('stat.def')} value={fmt(finalStats.def)} />
+          <FinalStat label={t('stat.em')} value={fmt(finalStats.em)} />
+          <FinalStat label="CR/CD" value={`${(finalStats.critRate * 100).toFixed(1)}% / ${(finalStats.critDmg * 100).toFixed(1)}%`} />
+          <FinalStat label="ER" value={`${(finalStats.er * 100).toFixed(0)}%`} />
+        </section>
+      )}
       {(['auto', 'skill', 'burst'] as const).map((role) => {
         const list = groups[role]
         if (!list.length) return null
@@ -641,12 +376,8 @@ function DamagePanel({
                         </select>
                       </td>
                       <td className="px-2 py-2 text-right tabular-nums">{fmt(r.out.nonCrit)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums text-amber-700 dark:text-amber-400">
-                        {fmt(r.out.crit)}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums font-medium">
-                        {fmt(r.out.avg)}
-                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums text-amber-700 dark:text-amber-400">{fmt(r.out.crit)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(r.out.avg)}</td>
                     </tr>
                   )
                 })}
@@ -658,6 +389,15 @@ function DamagePanel({
       <p className="text-xs text-zinc-500">
         <strong>{t('damage.noteEmphasis')}</strong>：{t('damage.note')}
       </p>
+    </div>
+  )
+}
+
+function FinalStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] text-zinc-500 uppercase tracking-wide">{label}</div>
+      <div className="text-base tabular-nums font-medium">{value}</div>
     </div>
   )
 }
@@ -699,9 +439,7 @@ function SubstatPanel({
             const isPositive = s.absoluteDelta > 0
             return (
               <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                <td className="px-4 py-2">
-                  {t(`substat.${s.substat}`)}
-                </td>
+                <td className="px-4 py-2">{t(`substat.${s.substat}`)}</td>
                 <td className="px-2 py-2">
                   <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
                     <div
