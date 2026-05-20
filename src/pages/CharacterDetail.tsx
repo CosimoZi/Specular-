@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { displayName, getCharacterIndex, iconUrl } from '@/data'
-import { useI18n } from '@/i18n/store'
 import {
   loadCharacterMeta,
   hitMultiplier,
@@ -10,30 +9,51 @@ import {
   type ExtractedHit,
 } from '@/data/meta'
 import {
+  computeBaseStats,
+  computeAscensionBonus,
+  defaultAscensionFor,
+  MAX_LEVEL_BY_ASCENSION,
+} from '@/data/character-stats'
+import {
   aggregateStats,
   calcDamage,
   type DamageElement,
   type Reaction,
+  type StatBag,
 } from '@/engine'
 import { ELEMENT_COLOR } from '@/data/types'
-import { useT } from '@/i18n/store'
+import { useI18n, useT } from '@/i18n/store'
 
 interface BuildForm {
+  // Character base
   charLevel: number
+  ascensionStage: number // 0..6; auto-tracks level by default
+  // Manual override for base stats (if user disables auto-compute)
+  manualBase: boolean
+  baseAtkOverride: number
+  baseHpOverride: number
+  baseDefOverride: number
+  // Bonuses from weapon + artifact + buffs (sum of everything that's not character base)
+  atkFlat: number // flat ATK from weapon + flowers + buffs
+  atkPct: number // %ATK from artifacts + buffs (0-100 in form, /100 when used)
+  hpFlat: number
+  hpPct: number
+  defFlat: number
+  defPct: number
+  em: number // flat EM from substats etc.
+  critRate: number // %, on top of 5% baseline
+  critDmg: number // %, on top of 50% baseline
+  erBonus: number // % on top of 100% baseline
+  elementBonus: number // % element-matched DMG
+  // Talent levels
+  autoLvl: number
+  skillLvl: number
+  burstLvl: number
+  // Enemy
   enemyLevel: number
   enemyRes: number
   resReduction: number
   defReduction: number
-  atk: number
-  hp: number
-  def: number
-  em: number
-  critRate: number
-  critDmg: number
-  elementBonus: number
-  autoLvl: number
-  skillLvl: number
-  burstLvl: number
   reaction: ReactionPick
 }
 
@@ -48,20 +68,29 @@ type ReactionPick =
 
 const DEFAULTS: BuildForm = {
   charLevel: 90,
-  enemyLevel: 100,
-  enemyRes: 10,
-  resReduction: 0,
-  defReduction: 0,
-  atk: 2000,
-  hp: 20000,
-  def: 1000,
+  ascensionStage: 6,
+  manualBase: false,
+  baseAtkOverride: 0,
+  baseHpOverride: 0,
+  baseDefOverride: 0,
+  atkFlat: 600, // typical 5* weapon base ATK + artifact flat
+  atkPct: 60,
+  hpFlat: 4780, // typical flower main stat
+  hpPct: 0,
+  defFlat: 0,
+  defPct: 0,
   em: 100,
-  critRate: 70,
-  critDmg: 150,
+  critRate: 65, // 70% total with 5% baseline (matches the old default of 70)
+  critDmg: 100, // 150% total
+  erBonus: 30, // 130% total
   elementBonus: 46.6,
   autoLvl: 10,
   skillLvl: 10,
   burstLvl: 10,
+  enemyLevel: 100,
+  enemyRes: 10,
+  resReduction: 0,
+  defReduction: 0,
   reaction: 'none',
 }
 
@@ -98,19 +127,73 @@ export default function CharacterDetail() {
       .catch((e) => setLoadError(e.message))
   }, [id])
 
+  // Auto-sync ascensionStage with charLevel unless user has manually changed it.
+  // We keep a simple invariant: if level allows a higher stage, but stage hasn't
+  // been bumped up, bump it. We don't override a user who explicitly set a
+  // higher stage at a lower level (sub-level overlevelling is valid).
+  useEffect(() => {
+    setForm((f) => {
+      const minStage = defaultAscensionFor(f.charLevel)
+      if (f.ascensionStage < minStage) return { ...f, ascensionStage: minStage }
+      // Also cap level to ascension's allowed maximum (in-game ceiling).
+      const cap = MAX_LEVEL_BY_ASCENSION[f.ascensionStage] ?? 90
+      if (f.charLevel > cap) return { ...f, charLevel: cap }
+      return f
+    })
+  }, [form.charLevel, form.ascensionStage])
+
   const element: DamageElement = idx ? normalizeElement(idx.element) : 'Physical'
 
+  // Auto-computed base stats from level + ascension
+  const autoBase = useMemo(() => {
+    if (!meta) return { hp: 0, atk: 0, def: 0 }
+    return computeBaseStats(meta, form.charLevel, form.ascensionStage)
+  }, [meta, form.charLevel, form.ascensionStage])
+
+  const ascensionBonusBag: StatBag = useMemo(() => {
+    if (!meta) return {}
+    return computeAscensionBonus(meta, form.ascensionStage)
+  }, [meta, form.ascensionStage])
+
+  // Compute final final stats by aggregating: char base + ascension bonus + form's
+  // flat/pct bonuses from weapon+artifact+buffs.
   const rows = useMemo(() => {
-    if (!meta) return []
+    if (!meta) {
+      return { rows: [] as Array<{
+        role: 'auto' | 'skill' | 'burst'
+        lvl: number
+        hit: ExtractedHit
+        multiplier: number
+        out: ReturnType<typeof calcDamage>
+      }>, finalStats: null as ReturnType<typeof aggregateStats> | null }
+    }
+    const baseAtk = form.manualBase ? form.baseAtkOverride : autoBase.atk
+    const baseHp = form.manualBase ? form.baseHpOverride : autoBase.hp
+    const baseDef = form.manualBase ? form.baseDefOverride : autoBase.def
     const reaction = reactionFromPick(form.reaction)
+
     const stats = aggregateStats([
       {
-        atkFlat: form.atk,
-        hpFlat: form.hp,
-        defFlat: form.def,
+        // Character base (treated as flat — % bonuses are below)
+        atkFlat: baseAtk,
+        hpFlat: baseHp,
+        defFlat: baseDef,
+      },
+      // Ascension stat (e.g. +28.8% ATK at stage 6)
+      ascensionBonusBag,
+      // External bonuses (weapon + artifact main/sub + buffs aggregated by user)
+      {
+        atkFlat: form.atkFlat,
+        atkPct: form.atkPct / 100,
+        hpFlat: form.hpFlat,
+        hpPct: form.hpPct / 100,
+        defFlat: form.defFlat,
+        defPct: form.defPct / 100,
         em: form.em,
-        critRate: form.critRate / 100 - 0.05,
-        critDmg: form.critDmg / 100 - 0.5,
+        // critRate/critDmg/er baselines are already included in aggregateStats
+        critRate: form.critRate / 100,
+        critDmg: form.critDmg / 100,
+        er: form.erBonus / 100,
         pyroDmg: element === 'Pyro' ? form.elementBonus / 100 : 0,
         hydroDmg: element === 'Hydro' ? form.elementBonus / 100 : 0,
         cryoDmg: element === 'Cryo' ? form.elementBonus / 100 : 0,
@@ -168,8 +251,8 @@ export default function CharacterDetail() {
         collect.push({ role, lvl, hit: { ...hit, scaling }, multiplier: m, out })
       }
     }
-    return collect
-  }, [meta, form, element, scalingOverride])
+    return { rows: collect, finalStats: stats }
+  }, [meta, form, element, scalingOverride, autoBase, ascensionBonusBag])
 
   if (!idx) {
     return (
@@ -220,11 +303,18 @@ export default function CharacterDetail() {
       )}
 
       {meta && (
-        <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-          <BuildPanel form={form} setForm={setForm} element={element} t={t} />
+        <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+          <BuildPanel
+            form={form}
+            setForm={setForm}
+            element={element}
+            autoBase={autoBase}
+            ascensionBonusBag={ascensionBonusBag}
+            t={t}
+          />
           <DamagePanel
             meta={meta}
-            rows={rows}
+            rows={rows.rows}
             scalingOverride={scalingOverride}
             setScalingOverride={setScalingOverride}
             t={t}
@@ -239,25 +329,62 @@ function BuildPanel({
   form,
   setForm,
   element,
+  autoBase,
+  ascensionBonusBag,
   t,
 }: {
   form: BuildForm
   setForm: (next: BuildForm) => void
   element: DamageElement
+  autoBase: { hp: number; atk: number; def: number }
+  ascensionBonusBag: StatBag
   t: (key: string, fallback?: string) => string
 }) {
-  const upd = (k: keyof BuildForm, v: number | string) =>
+  const upd = (k: keyof BuildForm, v: number | string | boolean) =>
     setForm({ ...form, [k]: v as never })
+  const ascensionStages = [0, 1, 2, 3, 4, 5, 6]
+
   return (
     <div className="space-y-4">
       <section>
-        <h3 className="text-sm font-semibold mb-2">{t('detail.section.stats')}</h3>
-        <NumberRow label={t('stat.atk')} value={form.atk} step={50} onChange={(v) => upd('atk', v)} />
-        <NumberRow label={t('stat.hp')} value={form.hp} step={500} onChange={(v) => upd('hp', v)} />
-        <NumberRow label={t('stat.def')} value={form.def} step={50} onChange={(v) => upd('def', v)} />
+        <h3 className="text-sm font-semibold mb-2">{t('detail.section.charLevel')}</h3>
+        <NumberRow label={t('player.charLevel')} value={form.charLevel} step={1} min={1} max={90} onChange={(v) => upd('charLevel', v)} />
+        <label className="block text-xs text-zinc-500 mt-2 mb-1">{t('player.ascensionStage')}</label>
+        <select
+          value={form.ascensionStage}
+          onChange={(e) => upd('ascensionStage', parseInt(e.target.value, 10))}
+          className="w-full px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
+        >
+          {ascensionStages.map((s) => (
+            <option key={s} value={s}>
+              {t('player.stage')} {s} (≤{MAX_LEVEL_BY_ASCENSION[s]})
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-zinc-500 mt-2">
+          {t('player.autoBase')}: ATK <strong>{Math.round(autoBase.atk)}</strong> · HP <strong>{Math.round(autoBase.hp)}</strong> · DEF <strong>{Math.round(autoBase.def)}</strong>
+        </p>
+        {Object.keys(ascensionBonusBag).length > 0 && (
+          <p className="text-xs text-zinc-500 mt-1">
+            {t('player.ascensionBonus')}:{' '}
+            {Object.entries(ascensionBonusBag)
+              .map(([k, v]) => `${k}: ${typeof v === 'number' && v < 1 ? `${(v * 100).toFixed(1)}%` : v}`)
+              .join(', ')}
+          </p>
+        )}
+      </section>
+      <section>
+        <h3 className="text-sm font-semibold mb-2">{t('detail.section.weaponArtifact')}</h3>
+        <NumberRow label={t('stat.atkFlat')} value={form.atkFlat} step={50} onChange={(v) => upd('atkFlat', v)} />
+        <NumberRow label={t('stat.atkPct')} value={form.atkPct} step={5} onChange={(v) => upd('atkPct', v)} />
+        <NumberRow label={t('stat.hpFlat')} value={form.hpFlat} step={500} onChange={(v) => upd('hpFlat', v)} />
+        <NumberRow label={t('stat.hpPct')} value={form.hpPct} step={5} onChange={(v) => upd('hpPct', v)} />
+        <NumberRow label={t('stat.defFlat')} value={form.defFlat} step={20} onChange={(v) => upd('defFlat', v)} />
+        <NumberRow label={t('stat.defPct')} value={form.defPct} step={5} onChange={(v) => upd('defPct', v)} />
         <NumberRow label={t('stat.em')} value={form.em} step={20} onChange={(v) => upd('em', v)} />
         <NumberRow label={t('stat.critRate')} value={form.critRate} step={5} onChange={(v) => upd('critRate', v)} />
         <NumberRow label={t('stat.critDmg')} value={form.critDmg} step={10} onChange={(v) => upd('critDmg', v)} />
+        <NumberRow label={t('stat.erBonus')} value={form.erBonus} step={5} onChange={(v) => upd('erBonus', v)} />
         <NumberRow
           label={`${t(`element.${element}`)}${t('stat.elementBonus')}`}
           value={form.elementBonus}
@@ -279,9 +406,7 @@ function BuildPanel({
         <NumberRow label={t('enemy.defReduction')} value={form.defReduction} step={5} onChange={(v) => upd('defReduction', v)} />
       </section>
       <section>
-        <h3 className="text-sm font-semibold mb-2">{t('detail.section.player')}</h3>
-        <NumberRow label={t('player.charLevel')} value={form.charLevel} step={5} min={1} max={90} onChange={(v) => upd('charLevel', v)} />
-        <label className="block text-xs text-zinc-500 mb-1">{t('reaction.label')}</label>
+        <h3 className="text-sm font-semibold mb-2">{t('reaction.label')}</h3>
         <select
           value={form.reaction}
           onChange={(e) => upd('reaction', e.target.value)}
