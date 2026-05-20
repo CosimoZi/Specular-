@@ -43,17 +43,19 @@ export const useCharacterConfigs = create<ConfigStoreState>()(
         return getState().configs[k] ?? defaultConfig(id)
       },
       set: (id, next) => {
-        set({ configs: { ...getState().configs, [String(id)]: next } })
+        const stamped = { ...next, lastModified: Date.now() }
+        set({ configs: { ...getState().configs, [String(id)]: stamped } })
       },
       patch: (id, p) => {
         const k = String(id)
         const cur = getState().configs[k] ?? defaultConfig(id)
-        set({ configs: { ...getState().configs, [k]: { ...cur, ...p } } })
+        const stamped = { ...cur, ...p, lastModified: Date.now() }
+        set({ configs: { ...getState().configs, [k]: stamped } })
       },
       setArtifact: (id, slot, piece) => {
         const k = String(id)
         const cur = getState().configs[k] ?? defaultConfig(id)
-        const next = { ...cur, artifacts: { ...cur.artifacts } }
+        const next = { ...cur, artifacts: { ...cur.artifacts }, lastModified: Date.now() }
         if (piece) next.artifacts[slot] = piece
         else delete next.artifacts[slot]
         set({ configs: { ...getState().configs, [k]: next } })

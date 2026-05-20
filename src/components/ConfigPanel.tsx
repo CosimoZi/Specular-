@@ -321,29 +321,9 @@ export default function ConfigPanel({
         })}
       </Section>
 
-      {/* Enemy + reaction */}
-      <Section title={t('detail.section.enemy')}>
-        <NumberRow label={t('enemy.level')} value={config.enemyLevel} min={1} max={110} step={5} onChange={(v) => upd('enemyLevel', v)} />
-        <NumberRow label={t('enemy.baseRes')} value={config.enemyBaseRes} step={5} onChange={(v) => upd('enemyBaseRes', v)} />
-        <NumberRow label={t('enemy.resReduction')} value={config.enemyResReduction} step={5} onChange={(v) => upd('enemyResReduction', v)} />
-        <NumberRow label={t('enemy.defReduction')} value={config.enemyDefReduction} step={5} onChange={(v) => upd('enemyDefReduction', v)} />
-      </Section>
-
-      <Section title={t('reaction.label')}>
-        <select
-          value={config.reaction}
-          onChange={(e) => upd('reaction', e.target.value as CharacterConfig['reaction'])}
-          className="w-full px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
-        >
-          <option value="none">{t('reaction.none')}</option>
-          <option value="vape_strong">{t('reaction.vape_strong')}</option>
-          <option value="vape_weak">{t('reaction.vape_weak')}</option>
-          <option value="melt_strong">{t('reaction.melt_strong')}</option>
-          <option value="melt_weak">{t('reaction.melt_weak')}</option>
-          <option value="aggravate">{t('reaction.aggravate')}</option>
-          <option value="spread">{t('reaction.spread')}</option>
-        </select>
-      </Section>
+      <p className="text-xs text-zinc-500 italic pt-2">
+        {t('config.enemyMoved')}
+      </p>
 
       <div className="flex gap-2 pt-2">
         <button

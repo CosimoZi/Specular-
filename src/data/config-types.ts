@@ -73,8 +73,6 @@ export interface CharacterConfig {
   }>
   // "Imported from Enka" mode — if true, the engine uses the snapshot
   // aggregated stats below instead of deriving from weapon + artifacts.
-  // This is the simplest path for UID import; detailed piece-by-piece import
-  // is Phase 2.3 in the roadmap.
   importMode?: {
     finalAtk: number
     finalHp: number
@@ -85,11 +83,9 @@ export interface CharacterConfig {
     er: number
     elementBonus: number // for the character's matching element
   }
-  // Enemy + reaction live next to the config so they persist too.
-  enemyLevel: number
-  enemyBaseRes: number // %
-  enemyResReduction: number // %
-  enemyDefReduction: number // %
+  /** Unix ms timestamp of last edit. Drives "recently configured first" sort. */
+  lastModified: number
+  /** Default reaction tied to this character (used when they're the focus in /team). */
   reaction:
     | 'none'
     | 'vape_strong'
@@ -98,6 +94,42 @@ export interface CharacterConfig {
     | 'melt_weak'
     | 'aggravate'
     | 'spread'
+  /** Per-hit scaling override (atk → hp/def/em). Persists across sessions. */
+  scalingOverride?: Record<string, 'atk' | 'hp' | 'def' | 'em'>
+}
+
+/** Team config + which character is the "focus" for the damage display. */
+export interface TeamConfig {
+  slots: Array<number | string | null> // up to 4
+  focusIndex: number | null // index into slots; null = first non-null
+  /** Enemy + reaction live on the team now, not per-character. */
+  enemyLevel: number
+  enemyBaseRes: number
+  enemyResReduction: number
+  enemyDefReduction: number
+  reaction:
+    | 'none'
+    | 'vape_strong'
+    | 'vape_weak'
+    | 'melt_strong'
+    | 'melt_weak'
+    | 'aggravate'
+    | 'spread'
+  /** Per-buff toggles, keyed by buff id. Default = whatever the buff spec says. */
+  buffToggles: Record<string, boolean>
+}
+
+export function defaultTeam(): TeamConfig {
+  return {
+    slots: [null, null, null, null],
+    focusIndex: null,
+    enemyLevel: 100,
+    enemyBaseRes: 10,
+    enemyResReduction: 0,
+    enemyDefReduction: 0,
+    reaction: 'none',
+    buffToggles: {},
+  }
 }
 
 export function defaultConfig(characterId: number | string): CharacterConfig {
@@ -110,10 +142,20 @@ export function defaultConfig(characterId: number | string): CharacterConfig {
     weapon: { weaponId: null, level: 90, ascensionStage: 6, refinement: 1 },
     artifacts: {},
     customBuffs: [],
-    enemyLevel: 100,
-    enemyBaseRes: 10,
-    enemyResReduction: 0,
-    enemyDefReduction: 0,
+    lastModified: 0,
     reaction: 'none',
+    scalingOverride: {},
   }
+}
+
+/** A config counts as "configured" once the user has touched it (lastModified > 0)
+ *  OR it has any weapon / artifact piece picked / non-default talent levels. */
+export function isConfigured(c: CharacterConfig | undefined): boolean {
+  if (!c) return false
+  if (c.lastModified > 0) return true
+  if (c.weapon.weaponId != null) return true
+  if (Object.keys(c.artifacts).length > 0) return true
+  if (c.constellation > 0) return true
+  if (c.importMode) return true
+  return false
 }

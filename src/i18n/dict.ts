@@ -44,6 +44,10 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'characters.filter.rarity': '星级',
     'characters.filter.weapon': '武器',
     'characters.hint': '点击进入详情页查看技能倍率表 + 简易伤害计算。',
+    'characters.hintV2': '配置角色（武器 + 圣遗物 + 命座…）。已配置的排在前面、颜色饱满，未配置的灰显。点击任意头像编辑。',
+    'characters.configured': '已配置',
+    'characters.notConfigured': '未配置',
+    'characters.noneConfigured': '还没配置任何角色。点下方任意角色开始。',
     'characters.notFound': '未找到角色',
     'characters.backToList': '← 列表',
 
@@ -170,11 +174,25 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'substat.defFlat': '固定防御 (+23.15)',
 
     'team.hint': '至多 4 个角色并排比较。导入 UID 后会用你的真实面板，否则用 lvl 90 + 默认 build 估算。v1 不含跨人物增益传递（班尼特 Q、芙宁娜等）。',
+    'team.v2Hint':
+      '从已配置的角色里挑最多 4 人。选一个为「focus」（红色框），看 focus 在这队伍里收到了哪些 buff、以及他每个技能的伤害。',
     'team.emptySlot': '空位',
     'team.bestHit': '最高单次（期望）',
     'team.totalCycle': '全技能总伤',
     'team.totalDamage': '团队总伤害（轮转一周期）',
     'team.totalNote': '注：未模拟 buff 跨人物传递，结果是各角色单算的总和。',
+    'team.thisFocus': '聚焦中',
+    'team.setFocus': '设为聚焦',
+    'team.clearSlot': '清空',
+    'team.enemyAndReaction': '敌人 + 反应',
+    'team.buffsTitle': '可用 buff',
+    'team.forFocus': '对',
+    'team.noBuffsAvailable': '当前队伍里没有可识别的支援 buff（或所有提供 buff 的角色都没在队里）。',
+    'team.buffsCoverage': 'v1 已收录的支援 buff 标杆',
+    'team.charactersCoveredSuffix': '位角色',
+    'team.pickToBegin': '先在上方挑一个角色作为 focus，再看伤害。',
+    'team.noConfiguredCharacters': '还没配置任何角色。',
+    'team.goConfigureLink': '去配置角色 →',
 
     'substatPage.movedNotice': '词条边际收益评估已整合在角色详情页的伤害表下方，先选一个角色：',
     'substatPage.goToCharacters': '去角色列表 →',
@@ -201,6 +219,9 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'config.importedTag': '已从 UID 导入',
     'config.importedNote': '正在使用 Enka 给你的最终聚合面板（已包含武器/圣遗物/突破），下方编辑器对当前计算不生效，除非清除导入。',
     'config.clearImport': '清除导入，按下方配置重算',
+    'config.enemyMoved': '提示：敌人 + 反应已移到 /team 页（团队上下文）。这里只配置角色本身。',
+    'detail.goToTeam': '到 team 看实战伤害',
+    'detail.goToTeamHint': '伤害计算在 /team 页基于"当前队伍 + 聚焦角色"展示。',
 
     'nav.settings': '设置',
     'settings.title': '设置',
@@ -259,6 +280,12 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'characters.filter.weapon': 'Weapon',
     'characters.hint':
       'Click to open the detail page with talent multipliers + a quick damage calc.',
+    'characters.hintV2':
+      "Configure characters (weapon + artifacts + constellation…). Configured ones come first in full color; unconfigured are dimmed. Click any avatar to edit.",
+    'characters.configured': 'Configured',
+    'characters.notConfigured': 'Not configured',
+    'characters.noneConfigured':
+      "You haven't configured any characters yet. Click any avatar below to start.",
     'characters.notFound': 'Character not found',
     'characters.backToList': '← Back',
 
@@ -389,12 +416,27 @@ export const DICT: Record<Locale, Record<string, string>> = {
 
     'team.hint':
       'Up to 4 characters side by side. UID-imported builds use your real stats; otherwise lvl 90 + default build is assumed. v1 does NOT model cross-character buffs (Bennett Q, Furina fanfare, etc.).',
+    'team.v2Hint':
+      'Pick up to 4 configured characters. Mark one as the focus (red ring) to see which buffs they receive in this team and their per-skill damage.',
     'team.emptySlot': 'Empty slot',
     'team.bestHit': 'Top single hit (avg)',
     'team.totalCycle': 'All-skill total',
     'team.totalDamage': 'Team total (one rotation)',
     'team.totalNote':
       "Note: this v1 sums each character's damage in isolation; cross-character buffs are not modelled yet.",
+    'team.thisFocus': 'Focused',
+    'team.setFocus': 'Set as focus',
+    'team.clearSlot': 'Clear',
+    'team.enemyAndReaction': 'Enemy + reaction',
+    'team.buffsTitle': 'Available buffs',
+    'team.forFocus': 'for',
+    'team.noBuffsAvailable':
+      'No recognised support buffs from the current team (or none of the buffer characters are slotted in).',
+    'team.buffsCoverage': 'v1 curated support buffs cover',
+    'team.charactersCoveredSuffix': 'characters',
+    'team.pickToBegin': 'Pick a focus character above to see their damage.',
+    'team.noConfiguredCharacters': "You haven't configured any characters yet.",
+    'team.goConfigureLink': 'Configure characters →',
 
     'substatPage.movedNotice':
       'Substat marginal-value analysis now lives at the bottom of each character detail page. Pick a character first:',
@@ -424,6 +466,11 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'config.importedNote':
       "Using Enka's aggregated final stats (already includes weapon/artifacts/ascension). The editor below doesn't affect the current calc unless you clear the import.",
     'config.clearImport': 'Clear import, recompute from config below',
+    'config.enemyMoved':
+      'Note: enemy + reaction moved to /team (team context). This page configures only the character itself.',
+    'detail.goToTeam': 'Go to team for live damage',
+    'detail.goToTeamHint':
+      "Damage now lives at /team — based on the current team + focused character.",
 
     'nav.settings': 'Settings',
     'settings.title': 'Settings',
