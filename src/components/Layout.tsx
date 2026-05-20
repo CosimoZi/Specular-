@@ -14,7 +14,7 @@ export default function Layout() {
       <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/70 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
           <NavLink to="/" className="text-lg font-semibold tracking-tight">
-            Ysin
+            Specular
           </NavLink>
           <nav className="flex gap-1 text-sm">
             {navItems.map((item) => (
@@ -40,7 +40,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <footer className="border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 py-4 text-center">
-        Ysin · 原神计算器 · 数据来自{' '}
+        Specular · 原神镜中之像 · 数据来自{' '}
         <a className="underline hover:text-zinc-700 dark:hover:text-zinc-300" href="https://ambr.top" target="_blank" rel="noreferrer">
           ambr.top
         </a>
