@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import Home from '@/pages/Home'
 import Characters from '@/pages/Characters'
@@ -7,11 +7,9 @@ import Substat from '@/pages/Substat'
 import Team from '@/pages/Team'
 import UidImport from '@/pages/UidImport'
 
-const base = import.meta.env.BASE_URL.replace(/\/$/, '')
-
 export default function App() {
   return (
-    <BrowserRouter basename={base}>
+    <HashRouter>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Home />} />
@@ -24,6 +22,6 @@ export default function App() {
           <Route path="uid" element={<UidImport />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
