@@ -7,9 +7,9 @@ import { ELEMENT_COLOR, ELEMENT_LABEL } from '@/data/types'
 
 const features = [
   {
-    to: '/calc',
+    to: '/characters',
     title: '单角色伤害计算',
-    desc: '输入面板 + 圣遗物 + 武器 + 天赋等级，查看每个技能的预期伤害与暴击/期望伤害。',
+    desc: '从角色列表选一个，输入面板 + 反应 → 每个技能的非暴击/暴击/期望伤害。',
   },
   {
     to: '/substat',

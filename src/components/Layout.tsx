@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 const navItems = [
   { to: '/', label: '首页', end: true },
-  { to: '/calc', label: '单角色计算' },
+  { to: '/characters', label: '角色' },
   { to: '/substat', label: '词条评估' },
   { to: '/team', label: '配队伤害' },
   { to: '/uid', label: 'UID 导入' },
