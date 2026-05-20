@@ -15,8 +15,15 @@ const charactersIndex = charactersJson as unknown as IndexFile<CharacterIndexEnt
 const weaponsIndex = weaponsJson as unknown as IndexFile<WeaponIndexEntry>
 const artifactsIndex = artifactsJson as unknown as IndexFile<ArtifactSetIndexEntry>
 
+/** Numeric prefix of an id ("10000005-anemo" → 10000005, 10000131 → 10000131). */
+function idPrefix(id: number | string): number {
+  return typeof id === 'number' ? id : parseInt(String(id), 10) || 0
+}
+
 export function listCharacters(): CharacterIndexEntry[] {
-  return Object.values(charactersIndex.items).sort((a, b) => b.id - a.id)
+  return Object.values(charactersIndex.items).sort(
+    (a, b) => idPrefix(b.id) - idPrefix(a.id),
+  )
 }
 
 export function listWeapons(): WeaponIndexEntry[] {
@@ -65,4 +72,14 @@ export const fetchArtifactDetail = (id: number | string) =>
 export function iconUrl(icon: string): string {
   if (!icon) return ''
   return `https://gi.yatta.moe/assets/UI/${icon}.png`
+}
+
+/** Traveler (10000005 / 10000007) variants share the name "旅行者". Add the
+ *  in-game alias (空 / 荧 for zh, Aether / Lumine for en) so users can tell
+ *  the 12 cards apart in the grid. */
+export function displayName(entry: CharacterIndexEntry, locale: 'zh' | 'en' = 'zh'): string {
+  const prefix = idPrefix(entry.id)
+  if (prefix === 10000005) return locale === 'en' ? `${entry.name} (Aether)` : `${entry.name}·空`
+  if (prefix === 10000007) return locale === 'en' ? `${entry.name} (Lumine)` : `${entry.name}·荧`
+  return entry.name
 }

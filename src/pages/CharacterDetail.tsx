@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getCharacterIndex, iconUrl } from '@/data'
+import { displayName, getCharacterIndex, iconUrl } from '@/data'
+import { useI18n } from '@/i18n/store'
 import {
   loadCharacterMeta,
   hitMultiplier,
@@ -78,6 +79,7 @@ function reactionFromPick(pick: ReactionPick): Reaction {
 
 export default function CharacterDetail() {
   const t = useT()
+  const locale = useI18n((s) => s.locale)
   const { id } = useParams<{ id: string }>()
   const idx = id ? getCharacterIndex(id) : undefined
   const [meta, setMeta] = useState<CharacterMeta | null>(null)
@@ -189,10 +191,10 @@ export default function CharacterDetail() {
             background: `linear-gradient(180deg, ${ELEMENT_COLOR[idx.element] ?? '#888'}55, transparent)`,
           }}
         >
-          <img src={iconUrl(idx.icon)} alt={idx.name} className="w-full h-full object-cover" />
+          <img src={iconUrl(idx.icon)} alt={displayName(idx, locale)} className="w-full h-full object-cover" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold">{idx.name}</h1>
+          <h1 className="text-2xl font-semibold">{displayName(idx, locale)}</h1>
           <div className="text-sm text-zinc-500 flex gap-3 mt-1">
             <span style={{ color: ELEMENT_COLOR[idx.element] }}>{t(`element.${idx.element}`)}</span>
             <span>·</span>

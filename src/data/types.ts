@@ -75,7 +75,8 @@ export const ELEMENT_COLOR: Record<string, string> = {
 export type FightProp = string
 
 export interface CharacterIndexEntry {
-  id: number
+  /** Numeric for most characters, "<id>-<element>" for Traveler variants. */
+  id: number | string
   name: string
   rank: 4 | 5
   element: Element

@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
-import { iconUrl, listCharacters } from '@/data'
+import { displayName, iconUrl, listCharacters } from '@/data'
 import { ELEMENT_COLOR } from '@/data/types'
-import { useT } from '@/i18n/store'
+import { useI18n, useT } from '@/i18n/store'
 
 export default function Home() {
   const t = useT()
+  const locale = useI18n((s) => s.locale)
   const all = listCharacters()
   const latest = all.slice(0, 12)
   const features = [
@@ -57,12 +58,12 @@ export default function Home() {
               >
                 <img
                   src={iconUrl(c.icon)}
-                  alt={c.name}
+                  alt={displayName(c, locale)}
                   loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                 />
               </div>
-              <div className="text-sm font-medium truncate">{c.name}</div>
+              <div className="text-sm font-medium truncate">{displayName(c, locale)}</div>
               <div className="text-xs" style={{ color: ELEMENT_COLOR[c.element] ?? undefined }}>
                 {t(`element.${c.element}`)} · {c.rank}★
               </div>

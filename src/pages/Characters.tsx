@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { iconUrl, listCharacters } from '@/data'
+import { displayName, iconUrl, listCharacters } from '@/data'
+import { useI18n } from '@/i18n/store'
 import { ELEMENT_COLOR } from '@/data/types'
 import type { Element, WeaponType } from '@/data/types'
 import { useT } from '@/i18n/store'
@@ -25,6 +26,7 @@ const WEAPON_FILTERS: WeaponType[] = [
 
 export default function Characters() {
   const t = useT()
+  const locale = useI18n((s) => s.locale)
   const all = useMemo(() => listCharacters(), [])
   const [query, setQuery] = useState('')
   const [elemFilter, setElemFilter] = useState<Set<string>>(new Set())
@@ -34,7 +36,11 @@ export default function Characters() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return all.filter((c) => {
-      if (q && !c.name.toLowerCase().includes(q) && !c.route.toLowerCase().includes(q))
+      if (
+        q &&
+        !displayName(c, locale).toLowerCase().includes(q) &&
+        !c.route.toLowerCase().includes(q)
+      )
         return false
       if (elemFilter.size) {
         const synonyms: Record<string, string[]> = {
@@ -144,12 +150,12 @@ export default function Characters() {
             >
               <img
                 src={iconUrl(c.icon)}
-                alt={c.name}
+                alt={displayName(c, locale)}
                 loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
               />
             </div>
-            <div className="text-sm font-medium truncate">{c.name}</div>
+            <div className="text-sm font-medium truncate">{displayName(c, locale)}</div>
             <div
               className="text-xs flex justify-center gap-1 items-center"
               style={{ color: ELEMENT_COLOR[c.element] ?? undefined }}
