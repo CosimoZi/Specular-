@@ -120,9 +120,31 @@
 
 ---
 
-## 🌍 Phase 5 — 内容扩展 + 社区
+## ✅ Phase 5 — 结构化角色配置（已完成）
 
-### 5.1 数据更新自动化
+**目标**：把"自由输入面板字段"换成"按角色保存的完整 build 配置"。
+
+### 已交付：
+- `CharacterConfig` 类型：等级 / 突破 / 命之座 / 三天赋等级 / 武器 / 5 件圣遗物 / 自定义 buff
+- `useCharacterConfigs` Zustand 持久化到 localStorage（每角色一份）
+- 武器 picker：按角色武器类型筛选，自动算 lvl 90 base ATK + 副词条
+- 5 件圣遗物 slot 编辑器：套装 + 主词条（按 slot 限制选项）+ 4 副词条
+- 套装 2pc 效果自动从描述抽数值（攻击%、生命%、防御%、暴击、暴伤、精通、充能、元素增伤）
+- `/settings` 页：导出 / 导入 JSON 跨设备搬数据
+- UID 导入兼容：写入 `importMode` 快照覆盖配置，可清除恢复 per-piece 模式
+- 默认值：lvl 90 / 突破 6 / 0 命 / 天赋 10·10·10（按用户要求）
+
+### TODO（下一次再做）
+- 武器精炼效果自动应用（每把 5* 武器手动建模）
+- 4pc 套装效果（条件式，需要 plugin 系统）
+- 圣遗物副词条"滚动次数"分解 + 评分（接 Akasha 风格）
+- 可选 GitHub Gist 同步（用户自带 PAT，无后端）
+
+---
+
+## 🌍 Phase 6 — 内容扩展 + 社区
+
+### 6.1 数据更新自动化
 - 每周 cron 工作流：跑 `pnpm run data` → 比对 diff → 自动提 PR
 - 新角色出来当天网站就有
 
@@ -146,22 +168,22 @@
 
 ---
 
-## 🛠 Phase 6 — 工程化收尾
+## 🛠 Phase 7 — 工程化收尾
 
-### 6.1 路由切回 BrowserRouter
+### 7.1 路由切回 BrowserRouter
 - 当前用 HashRouter 是为了快速上 GH Pages
 - 加 404.html 跳转技巧 → 切到 BrowserRouter 拿到 pretty URL
 
-### 6.2 性能
+### 7.2 性能
 - meta 文件按需 lazy import
 - 角色图标 CDN preconnect
-- bundle 分析，目标主 bundle < 200 KB gzip
+- bundle 分析，目标主 bundle < 200 KB gzip（目前 121 KB gzip）
 
-### 6.3 测试覆盖
+### 7.3 测试覆盖
 - 给 5-10 个代表性角色（每种 scaling 一个、每种反应一个）写 e2e 测试
 - 引擎覆盖率到 80%+
 
-### 6.4 文档
+### 7.4 文档
 - CONTRIBUTING.md：怎么修 scaling 错误、加新角色覆写
 - ARCHITECTURE.md：data pipeline / engine / UI 三层关系
 
