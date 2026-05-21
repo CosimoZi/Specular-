@@ -36,6 +36,7 @@ export default function Team() {
   const team = useTeamConfig((s) => s.team)
   const setSlot = useTeamConfig((s) => s.setSlot)
   const setFocus = useTeamConfig((s) => s.setFocus)
+  const setSlotPosition = useTeamConfig((s) => s.setSlotPosition)
   const teamPatch = useTeamConfig((s) => s.patch)
   const setCond = useTeamConfig((s) => s.setCond)
   // Flatten characters → active-build-only map (for buff filtering / picker).
@@ -104,6 +105,7 @@ export default function Team() {
       .join('|')
   }, [team.slots, configsMap])
   const condStateKey = useMemo(() => JSON.stringify(team.condState ?? {}), [team.condState])
+  const slotPositionKey = useMemo(() => JSON.stringify(team.slotPosition ?? {}), [team.slotPosition])
   useEffect(() => {
     if (!focusConfig || focusIdx < 0) {
       setGoResult(null)
@@ -127,6 +129,7 @@ export default function Team() {
         enemyLevel: team.enemyLevel,
         enemyPreRes: team.enemyBaseRes / 100,
         condState: team.condState,
+        slotPosition: team.slotPosition,
       }
       // Route through new pipeline for characters that have a src/calc sheet
       // (Shenhe today). Fall back to legacy GO for everything else.
@@ -158,7 +161,7 @@ export default function Team() {
     // GO call. pinnedFormula is included so changing the substat target
     // re-runs the margin compute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusIdx, teamConfigsKey, condStateKey, team.enemyLevel, team.enemyBaseRes, pinnedFormula])
+  }, [focusIdx, teamConfigsKey, condStateKey, slotPositionKey, team.enemyLevel, team.enemyBaseRes, pinnedFormula])
 
   const configuredCharacters = useMemo(
     () => allCharacters.filter((c) => isConfigured(configsMap[String(c.id)])),
@@ -187,6 +190,20 @@ export default function Team() {
             locale={locale}
             t={t}
             config={charId != null ? configsMap[String(charId)] ?? null : null}
+            position={
+              team.slotPosition?.[String(slotIdx)] ??
+              (charId != null
+                ? configsMap[String(charId)]?.position ?? (slotIdx === focusIdx ? 'frontline' : 'backline')
+                : 'frontline')
+            }
+            onTogglePosition={() => {
+              const explicit = team.slotPosition?.[String(slotIdx)]
+              const effective = explicit ??
+                (charId != null
+                  ? configsMap[String(charId)]?.position ?? (slotIdx === focusIdx ? 'frontline' : 'backline')
+                  : 'frontline')
+              setSlotPosition(slotIdx, effective === 'frontline' ? 'backline' : 'frontline')
+            }}
           />
         ))}
       </div>
@@ -262,6 +279,7 @@ export default function Team() {
 
 function SlotCard({
   slotIdx, charId, isFocus, onPick, onClear, onFocus, locale, t, config,
+  position, onTogglePosition,
 }: {
   slotIdx: number
   charId: number | string | null
@@ -272,6 +290,8 @@ function SlotCard({
   locale: 'zh' | 'en'
   t: (k: string, f?: string) => string
   config: CharacterConfig | null
+  position: 'frontline' | 'backline'
+  onTogglePosition: () => void
 }) {
   if (charId == null) {
     return (
@@ -311,8 +331,19 @@ function SlotCard({
               </span>
             )}
           </div>
-          <div className="text-xs" style={{ color: ELEMENT_COLOR[idx.element] }}>
-            {t(`element.${idx.element}`)} · C{config?.constellation ?? 0}
+          <div className="text-xs flex items-center gap-2" style={{ color: ELEMENT_COLOR[idx.element] }}>
+            <span>{t(`element.${idx.element}`)} · C{config?.constellation ?? 0}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onTogglePosition() }}
+              title={t('team.togglePositionHint')}
+              className={`text-[10px] px-1.5 py-0 rounded font-medium tabular-nums ${
+                position === 'frontline'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                  : 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400'
+              }`}
+            >
+              {position === 'frontline' ? t('team.frontline') : t('team.backline')}
+            </button>
           </div>
         </div>
         <button onClick={onClear} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-sm" title={t('team.clearSlot')}>✕</button>

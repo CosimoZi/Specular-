@@ -16,6 +16,9 @@ interface TeamStoreState {
   setCond: (slotIdx: number, sheet: string, condName: string, value: number) => void
   /** Wipe every cond entry for a slot — used when a slot is cleared / swapped. */
   clearSlotConds: (slotIdx: number) => void
+  /** Set this slot's front-line/back-line override (or clear it). Doesn't
+   *  touch the underlying character config. */
+  setSlotPosition: (slotIdx: number, pos: 'frontline' | 'backline' | null) => void
   reset: () => void
 }
 
@@ -79,23 +82,34 @@ export const useTeamConfig = create<TeamStoreState>()(
         delete next[slotKey]
         set({ team: { ...cur, condState: next } })
       },
+      setSlotPosition: (slotIdx, pos) => {
+        const cur = getState().team
+        const slotKey = String(slotIdx)
+        const next = { ...(cur.slotPosition ?? {}) }
+        if (pos == null) delete next[slotKey]
+        else next[slotKey] = pos
+        set({ team: { ...cur, slotPosition: next } })
+      },
       reset: () => set({ team: defaultTeam() }),
     }),
     {
       name: 'specular-team',
-      // v2: added condState. Pre-v2 stores might not have it.
-      version: 2,
+      // v3: added slotPosition. v2: added condState.
+      version: 3,
       migrate: (persisted: unknown, fromVersion: number) => {
         if (!persisted || typeof persisted !== 'object') return persisted
         // Treat as a loose object — the persisted shape pre-v2 doesn't have
         // condState, but TeamConfig declares it required, so a precise cast
         // would narrow s.team to `never` and break the spread.
         const s = persisted as { team?: Record<string, unknown> }
-        const oldTeam = s.team
-        if (fromVersion < 2 && oldTeam && !('condState' in oldTeam)) {
-          return { ...s, team: { ...oldTeam, condState: {} } as TeamConfig }
+        let team = s.team
+        if (team && fromVersion < 2 && !('condState' in team)) {
+          team = { ...team, condState: {} }
         }
-        return s
+        if (team && fromVersion < 3 && !('slotPosition' in team)) {
+          team = { ...team, slotPosition: {} }
+        }
+        return team ? { ...s, team: team as TeamConfig } : s
       },
     },
   ),

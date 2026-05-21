@@ -121,6 +121,10 @@ export interface BuildOpts {
   condState?: CondState
   /** Enemy state for damage formulas. Default: lvl 100, 10% RES across the board. */
   enemy?: EnemyContext
+  /** Whether this character is currently on-field. Several weapon passives
+   *  (Calamity Queller, etc.) and artifact effects key off this. Default
+   *  true (treat as on-field) so existing callers stay backwards-compatible. */
+  onField?: boolean
 }
 
 export function buildCharacter(
@@ -132,6 +136,7 @@ export function buildCharacter(
     : (optsOrCondState as BuildOpts)
   const condState = opts.condState ?? {}
   const enemy: EnemyContext = opts.enemy ?? { level: 100 }
+  const onField = opts.onField ?? true
   const scope = new Scope()
   const goCharKey = goCharacterKey(config.characterId)
   if (!goCharKey) throw new Error(`Unknown character id: ${config.characterId}`)
@@ -143,6 +148,7 @@ export function buildCharacter(
   scope.set('talent.auto', config.talentLevels.auto)
   scope.set('talent.skill', config.talentLevels.skill)
   scope.set('talent.burst', config.talentLevels.burst)
+  scope.set('onField', onField ? 1 : 0)
 
   // ---- Phase 2: character base + ascension ----
   const charRaw = charDataRaw(goCharKey)

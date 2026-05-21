@@ -125,6 +125,11 @@ export interface TeamConfig {
    *  bool conds use 0/1, num conds use the integer value, list conds use an
    *  option index. Default = 0/absent = "off". */
   condState: Record<string, Record<string, Record<string, number>>>
+  /** Per-slot front-line / back-line override. Initial value seeds from the
+   *  character config's `position`, but team-level toggles here don't mutate
+   *  the character config. Absent entries fall back to a default (focus slot
+   *  → 'frontline', others → 'backline'). */
+  slotPosition: Record<string, 'frontline' | 'backline'>
 }
 
 export function defaultTeam(): TeamConfig {
@@ -138,6 +143,7 @@ export function defaultTeam(): TeamConfig {
     reaction: 'none',
     buffToggles: {},
     condState: {},
+    slotPosition: {},
   }
 }
 

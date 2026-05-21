@@ -21,7 +21,6 @@ export const CalamityQueller: WeaponSheet = {
   key: 'CalamityQueller',
   conds: [
     { name: 'stack', type: 'num', label: 'Consummation 层数', intOnly: true, min: 0, max: 6 },
-    { name: 'isActive', type: 'bool', label: '当前在场 (off = 不在场,效果加倍)' },
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
@@ -31,17 +30,18 @@ export const CalamityQueller: WeaponSheet = {
     const passive1Src = `${NAME} 被动 R${r}(全元素伤害)`
     for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, dmgBonus, passive1Src)
 
-    // Passive 2: stack ATK%, doubled when off-field.
+    // Passive 2: stack ATK%, doubled when off-field. On/off-field comes from
+    // the team-level slot position (NOT a per-weapon cond) — read from scope.
     const stacks = condState.CalamityQueller?.stack ?? 0
     if (stacks <= 0) return
-    const onField = (condState.CalamityQueller?.isActive ?? 0) !== 0
+    const onField = (scope.get('onField') ?? 1) !== 0
     const mult = onField ? 1 : 2
     const atkPctPerStack = ATK_PER_STACK[r]!
     const total = stacks * atkPctPerStack * mult
     scope.add(
       'weap.passive.atk_',
       total,
-      `${NAME} 被动 R${r}(${stacks} 层 × ${(atkPctPerStack * mult * 100).toFixed(1)}%${onField ? '' : ' ×2 不在场'})`,
+      `${NAME} 被动 R${r}(${stacks} 层 × ${(atkPctPerStack * mult * 100).toFixed(1)}%${onField ? '' : ' ×2 后台'})`,
     )
   },
 }

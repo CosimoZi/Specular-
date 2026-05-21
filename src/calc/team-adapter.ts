@@ -22,6 +22,9 @@ export interface TeamComputeOptions {
   enemyLevel?: number
   enemyPreRes?: number
   condState?: Record<string, Record<string, Record<string, number>>>
+  /** Per-slot front-line override. Absent slot → default (focus = frontline,
+   *  others = backline). */
+  slotPosition?: Record<string, 'frontline' | 'backline'>
 }
 
 export interface ComputedFormula {
@@ -70,8 +73,13 @@ export function computeTeamNew(
   // Cond state for the focus slot only.
   const focusCondState: CondState = opts.condState?.[String(focusSlotIdx)] ?? {}
 
+  // Resolve onField for the focus. Default: focus slot is frontline (on-field).
+  const explicitPos = opts.slotPosition?.[String(focusSlotIdx)]
+  const onField = explicitPos ? explicitPos === 'frontline' : true
+
   const r = buildCharacter(focus.config, {
     condState: focusCondState,
+    onField,
     enemy: {
       level: opts.enemyLevel ?? 100,
       preRes: { /* element-wise res defaults to opts.enemyPreRes for all */ },
@@ -85,6 +93,7 @@ export function computeTeamNew(
     const baseRes = opts.enemyPreRes
     const r2 = buildCharacter(focus.config, {
       condState: focusCondState,
+      onField,
       enemy: {
         level: opts.enemyLevel ?? 100,
         preRes: {
