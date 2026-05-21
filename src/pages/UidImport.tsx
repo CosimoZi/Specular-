@@ -20,16 +20,33 @@ export default function UidImport() {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [importedCount, setImportedCount] = useState<number>(0)
 
+  // Strip user input → a clean UID. Handles:
+  //   "  190631783  "            (leading/trailing whitespace)
+  //   "190 631 783" / "190-631-783" (separators inside)
+  //   "https://enka.network/u/190631783/" (full URL paste)
+  //   "https://enka.network/u/190631783/1" (URL with build slug)
+  //   "uid: 190631783"           (label prefix)
+  // If a 9-10 digit run exists with no digit immediately after, take it.
+  // Otherwise (mid-typing), keep only digits, capped at 10.
+  function cleanUid(raw: string): string {
+    const match = raw.match(/\d{9,10}(?!\d)/)
+    if (match) return match[0]
+    return raw.replace(/\D/g, '').slice(0, 10)
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!/^\d{9,10}$/.test(uid.trim())) {
+    const clean = cleanUid(uid)
+    if (!/^\d{9,10}$/.test(clean)) {
       setError(t('uid.invalid'))
       return
     }
+    // Snap the input to the clean value so user sees what we're actually sending.
+    if (clean !== uid) setUid(clean)
     setLoading(true)
     setError(null)
     try {
-      const r = await fetchEnkaUid(uid.trim())
+      const r = await fetchEnkaUid(clean)
       setResult(r)
       // Snapshot store (for backwards compat)
       setMany(r.builds)
@@ -61,7 +78,18 @@ export default function UidImport() {
           inputMode="numeric"
           pattern="\d{9,10}"
           value={uid}
-          onChange={(e) => setUid(e.target.value)}
+          onChange={(e) => setUid(cleanUid(e.target.value))}
+          onPaste={(e) => {
+            // Pasting a URL like https://enka.network/u/190631783/ should land
+            // as just the UID. Handle in onPaste so the regex extraction runs
+            // immediately rather than waiting for the controlled change.
+            const pasted = e.clipboardData.getData('text')
+            const clean = cleanUid(pasted)
+            if (clean !== pasted) {
+              e.preventDefault()
+              setUid(clean)
+            }
+          }}
           placeholder={t('uid.placeholder')}
           className="flex-1 px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
         />
