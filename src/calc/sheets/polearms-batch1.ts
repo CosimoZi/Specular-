@@ -2,6 +2,7 @@
 // Each export is a WeaponSheet registered under `weaponSheets`.
 
 import type { WeaponSheet } from '../sheet-types'
+import { WEAPON_NAME_ZH as W } from '../data/names-zh'
 
 const ALL_ELEMENTS = ['pyro', 'hydro', 'cryo', 'electro', 'anemo', 'geo', 'dendro'] as const
 
@@ -22,7 +23,7 @@ export const StaffOfHoma: WeaponSheet = {
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
-    scope.add('premod.hp_', HOMA_HP_PCT[r]!, `护摩之杖 被动 R${r}(HP%)`)
+    scope.add('premod.hp_', HOMA_HP_PCT[r]!, `${W.StaffOfHoma} 被动 R${r}(HP%)`)
     // HP-based flat ATK needs final HP, which is computed later in Phase 11.
     // We approximate using base+%-so-far. The build pipeline does Phase 6 (this
     // function) BEFORE Phase 9 base.hp. To do this properly we'd run Phase 11
@@ -44,7 +45,7 @@ export const StaffOfHoma: WeaponSheet = {
     scope.add(
       'artifact.sub.atk', // park flat ATK into the same slot
       flatAtk,
-      `护摩之杖 被动 R${r}(HP × ${(atkPctFromHp * 100).toFixed(1)}% → +${Math.round(flatAtk)} 攻击)`,
+      `${W.StaffOfHoma} 被动 R${r}(HP × ${(atkPctFromHp * 100).toFixed(1)}% → +${Math.round(flatAtk)} 攻击)`,
     )
   },
 }
@@ -67,12 +68,12 @@ export const PrimordialJadeWingedSpear: WeaponSheet = {
     const stacks = condState.PrimordialJadeWingedSpear?.stacks ?? 0
     if (stacks > 0) {
       const atkPct = stacks * JADE_ATK_PER_STACK[r]!
-      scope.add('weap.passive.atk_', atkPct, `和璞鸢 R${r}(${stacks} 层 ATK)`)
+      scope.add('weap.passive.atk_', atkPct, `${W.PrimordialJadeWingedSpear} R${r}(${stacks} 层 ATK)`)
     }
     if (stacks >= 7) {
       const bonus = JADE_DMG_AT_MAX[r]!
-      for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, bonus, `和璞鸢 R${r}(满层 全元素伤害)`)
-      scope.add('premod.dmg_.physical', bonus, `和璞鸢 R${r}(满层 物理伤害)`)
+      for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, bonus, `${W.PrimordialJadeWingedSpear} R${r}(满层 全元素伤害)`)
+      scope.add('premod.dmg_.physical', bonus, `${W.PrimordialJadeWingedSpear} R${r}(满层 物理伤害)`)
     }
   },
 }
@@ -91,8 +92,8 @@ export const SkywardSpine: WeaponSheet = {
   conds: [],
   apply(scope, ctx) {
     const r = ctx.refinement
-    scope.add('premod.critRate_', SKYWARD_CR[r]!, `天空之脊 被动 R${r}(CR)`)
-    scope.add('premod.enerRech_', SKYWARD_ER[r]!, `天空之脊 被动 R${r}(ER)`)
+    scope.add('premod.critRate_', SKYWARD_CR[r]!, `${W.SkywardSpine} 被动 R${r}(CR)`)
+    scope.add('premod.enerRech_', SKYWARD_ER[r]!, `${W.SkywardSpine} 被动 R${r}(ER)`)
   },
 }
 
@@ -113,7 +114,7 @@ export const EngulfingLightning: WeaponSheet = {
   apply(scope, ctx, condState) {
     const r = ctx.refinement
     if (condState.EngulfingLightning?.afterBurst) {
-      scope.add('premod.enerRech_', ENGULFING_Q_ER[r]!, `薙草之稻光 R${r}(Q 后 ER)`)
+      scope.add('premod.enerRech_', ENGULFING_Q_ER[r]!, `${W.EngulfingLightning} R${r}(Q 后 ER)`)
     }
     // ER → ATK% conversion. Read every ER source we've populated so far,
     // including premod.enerRech_ which is where set effects (Emblem 2pc etc.)
@@ -127,7 +128,7 @@ export const EngulfingLightning: WeaponSheet = {
       (scope.get('premod.enerRech_') ?? 0) +
       (condState.EngulfingLightning?.afterBurst ? ENGULFING_Q_ER[r]! : 0)
     const bonus = Math.min(ENGULFING_ATK_CAP[r]!, er * ENGULFING_ATK_PCT_FROM_ER[r]!)
-    scope.add('weap.passive.atk_', bonus, `薙草之稻光 R${r}(ER ${(er * 100).toFixed(0)}% → +${(bonus * 100).toFixed(1)}% ATK)`)
+    scope.add('weap.passive.atk_', bonus, `${W.EngulfingLightning} R${r}(ER ${(er * 100).toFixed(0)}% → +${(bonus * 100).toFixed(1)}% ATK)`)
   },
 }
 
@@ -154,10 +155,10 @@ export const StaffOfTheScarletSands: WeaponSheet = {
     const baseBonus = em * SCARLET_ATK_FROM_EM_BASE[r]!
     // weap.passive.atk_ holds % bonuses. ATK from EM is a FLAT ATK, not %.
     // Use the artifact.sub.atk slot for accumulation.
-    scope.add('artifact.sub.atk', baseBonus, `赤砂之杖 R${r}(EM × ${(SCARLET_ATK_FROM_EM_BASE[r]! * 100).toFixed(0)}% → +${Math.round(baseBonus)} ATK)`)
+    scope.add('artifact.sub.atk', baseBonus, `${W.StaffOfTheScarletSands} R${r}(EM × ${(SCARLET_ATK_FROM_EM_BASE[r]! * 100).toFixed(0)}% → +${Math.round(baseBonus)} ATK)`)
     if (stacks > 0) {
       const stackBonus = em * SCARLET_ATK_FROM_EM_PER_STACK[r]! * stacks
-      scope.add('artifact.sub.atk', stackBonus, `赤砂之杖 R${r}(${stacks} 层夜分 → +${Math.round(stackBonus)} ATK)`)
+      scope.add('artifact.sub.atk', stackBonus, `${W.StaffOfTheScarletSands} R${r}(${stacks} 层夜分 → +${Math.round(stackBonus)} ATK)`)
     }
   },
 }
@@ -178,8 +179,8 @@ export const DragonsBane: WeaponSheet = {
     const r = ctx.refinement
     const bonus = DRAGONSBANE_DMG[r]!
     // Applies to ALL outgoing damage. Use per-element broadcast.
-    for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, bonus, `匣里灭辰 R${r}(对水/火附着)`)
-    scope.add('premod.dmg_.physical', bonus, `匣里灭辰 R${r}(对水/火附着)`)
+    for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, bonus, `${W.DragonsBane} R${r}(对水/火附着)`)
+    scope.add('premod.dmg_.physical', bonus, `${W.DragonsBane} R${r}(对水/火附着)`)
   },
 }
 
@@ -194,7 +195,7 @@ export const WhiteTassel: WeaponSheet = {
   conds: [],
   apply(scope, ctx) {
     const r = ctx.refinement
-    scope.add('premod.dmg_.normal', WHITETASSEL_NORMAL[r]!, `白缨枪 R${r}`)
+    scope.add('premod.dmg_.normal', WHITETASSEL_NORMAL[r]!, `${W.WhiteTassel} R${r}`)
   },
 }
 
@@ -213,8 +214,8 @@ export const BlackTassel: WeaponSheet = {
     if (!condState.BlackTassel?.enemySlime) return
     const r = ctx.refinement
     const bonus = BLACKTASSEL_DMG_SLIME[r]!
-    for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, bonus, `黑缨枪 R${r}(史莱姆)`)
-    scope.add('premod.dmg_.physical', bonus, `黑缨枪 R${r}(史莱姆)`)
+    for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, bonus, `${W.BlackTassel} R${r}(史莱姆)`)
+    scope.add('premod.dmg_.physical', bonus, `${W.BlackTassel} R${r}(史莱姆)`)
   },
 }
 
@@ -234,10 +235,10 @@ export const Deathmatch: WeaponSheet = {
   apply(scope, ctx, condState) {
     const r = ctx.refinement
     if (condState.Deathmatch?.solo) {
-      scope.add('weap.passive.atk_', DEATHMATCH_SOLO[r]!, `决斗之枪 R${r}(单敌)`)
+      scope.add('weap.passive.atk_', DEATHMATCH_SOLO[r]!, `${W.Deathmatch} R${r}(单敌)`)
     } else {
-      scope.add('weap.passive.atk_', DEATHMATCH_MULTI[r]!, `决斗之枪 R${r}(多敌)`)
-      scope.add('premod.def_', DEATHMATCH_MULTI[r]!, `决斗之枪 R${r}(多敌 DEF)`)
+      scope.add('weap.passive.atk_', DEATHMATCH_MULTI[r]!, `${W.Deathmatch} R${r}(多敌)`)
+      scope.add('premod.def_', DEATHMATCH_MULTI[r]!, `${W.Deathmatch} R${r}(多敌 DEF)`)
     }
   },
 }
@@ -258,8 +259,8 @@ export const LithicSpear: WeaponSheet = {
     const r = ctx.refinement
     const n = condState.LithicSpear?.liyueCount ?? 0
     if (n > 0) {
-      scope.add('weap.passive.atk_', LITHIC_ATK[r]! * n, `千岩长枪 R${r}(${n} 璃月 ATK)`)
-      scope.add('premod.critRate_', LITHIC_CR[r]! * n, `千岩长枪 R${r}(${n} 璃月 CR)`)
+      scope.add('weap.passive.atk_', LITHIC_ATK[r]! * n, `${W.LithicSpear} R${r}(${n} 璃月 ATK)`)
+      scope.add('premod.critRate_', LITHIC_CR[r]! * n, `${W.LithicSpear} R${r}(${n} 璃月 CR)`)
     }
   },
 }
@@ -279,11 +280,11 @@ export const VortexVanquisher: WeaponSheet = {
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
-    scope.add('premod.shield_', VORTEX_SHIELD[r]!, `贯虹之槊 R${r}(护盾强效)`)
+    scope.add('premod.shield_', VORTEX_SHIELD[r]!, `${W.VortexVanquisher} R${r}(护盾强效)`)
     const s = condState.VortexVanquisher?.stacks ?? 0
     const mult = condState.VortexVanquisher?.shielded ? 2 : 1
     if (s > 0) {
-      scope.add('weap.passive.atk_', VORTEX_ATK[r]! * s * mult, `贯虹之槊 R${r}(${s} 层${mult === 2 ? ' × 2 护盾' : ''})`)
+      scope.add('weap.passive.atk_', VORTEX_ATK[r]! * s * mult, `${W.VortexVanquisher} R${r}(${s} 层${mult === 2 ? ' × 2 护盾' : ''})`)
     }
   },
 }

@@ -6,6 +6,9 @@
 //   effect is doubled (so 6.4 → 12.8% ATK%/stack at R1 off-field).
 
 import type { WeaponSheet } from '../sheet-types'
+import { WEAPON_NAME_ZH as W } from '../data/names-zh'
+
+const NAME = W.CalamityQueller
 
 // "All Elemental DMG Bonus" per wiki — physical is NOT included.
 const ALL_ELEMENTS = ['pyro', 'hydro', 'cryo', 'electro', 'anemo', 'geo', 'dendro'] as const
@@ -25,7 +28,7 @@ export const CalamityQueller: WeaponSheet = {
     if (r < 1 || r > 5) return
     // Passive 1: permanent +X% all-ele dmg.
     const dmgBonus = DMG_BONUS[r]!
-    const passive1Src = `破魔之弓 被动 R${r}(全元素伤害)`
+    const passive1Src = `${NAME} 被动 R${r}(全元素伤害)`
     for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, dmgBonus, passive1Src)
 
     // Passive 2: stack ATK%, doubled when off-field.
@@ -38,7 +41,7 @@ export const CalamityQueller: WeaponSheet = {
     scope.add(
       'weap.passive.atk_',
       total,
-      `破魔之弓 被动 R${r}(${stacks} 层 × ${(atkPctPerStack * mult * 100).toFixed(1)}%${onField ? '' : ' ×2 不在场'})`,
+      `${NAME} 被动 R${r}(${stacks} 层 × ${(atkPctPerStack * mult * 100).toFixed(1)}%${onField ? '' : ' ×2 不在场'})`,
     )
   },
 }

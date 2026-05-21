@@ -3,6 +3,9 @@
 //   4pc: vs cryo-affected enemy → +20% CR. vs frozen → +20% more.
 
 import type { ArtifactSetSheet } from '../sheet-types'
+import { ARTIFACT_SET_NAME_ZH as A } from '../data/names-zh'
+
+const NAME = A.BlizzardStrayer
 
 export const BlizzardStrayer: ArtifactSetSheet = {
   key: 'BlizzardStrayer',
@@ -12,11 +15,11 @@ export const BlizzardStrayer: ArtifactSetSheet = {
   ],
   apply(scope, count, condState) {
     if (count >= 2) {
-      scope.add('premod.dmg_.cryo', 0.15, '冰风迷途的勇士 2 件套')
+      scope.add('premod.dmg_.cryo', 0.15, `${NAME} 2 件套`)
     }
     if (count >= 4) {
-      if (condState.BlizzardStrayer?.enemyCryo) scope.add('premod.critRate_', 0.2, '冰风迷途的勇士 4 件套(冰附着)')
-      if (condState.BlizzardStrayer?.enemyFrozen) scope.add('premod.critRate_', 0.2, '冰风迷途的勇士 4 件套(冻结)')
+      if (condState.BlizzardStrayer?.enemyCryo) scope.add('premod.critRate_', 0.2, `${NAME} 4 件套(冰附着)`)
+      if (condState.BlizzardStrayer?.enemyFrozen) scope.add('premod.critRate_', 0.2, `${NAME} 4 件套(冻结)`)
     }
   },
 }

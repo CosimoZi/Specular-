@@ -3,6 +3,9 @@
 //   4pc: After using Elemental Burst, all party members +20% ATK for 12s.
 
 import type { ArtifactSetSheet } from '../sheet-types'
+import { ARTIFACT_SET_NAME_ZH as A } from '../data/names-zh'
+
+const NAME = A.NoblesseOblige
 
 export const NoblesseOblige: ArtifactSetSheet = {
   key: 'NoblesseOblige',
@@ -11,10 +14,10 @@ export const NoblesseOblige: ArtifactSetSheet = {
   ],
   apply(scope, count, condState) {
     if (count >= 2) {
-      scope.add('premod.dmg_.burst', 0.2, '昔日宗室之仪 2 件套')
+      scope.add('premod.dmg_.burst', 0.2, `${NAME} 2 件套`)
     }
     if (count >= 4 && condState.NoblesseOblige?.set4) {
-      scope.add('artifact.set.atk_', 0.2, '昔日宗室之仪 4 件套(Q 后)')
+      scope.add('artifact.set.atk_', 0.2, `${NAME} 4 件套(Q 后)`)
     }
   },
 }

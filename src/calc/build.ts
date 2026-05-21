@@ -26,6 +26,7 @@ import { characterSheets, weaponSheets, artifactSetSheets } from './sheets'
 import type { CondState } from './sheet-types'
 import { ShenheFormulas, applyShenheFormulaBuffs, shenheQResShred } from './sheets/Shenhe-formulas'
 import { evaluateFormula, type FormulaDef, type FormulaResult, type EnemyContext } from './formula'
+import { CHARACTER_NAME_ZH, WEAPON_NAME_ZH } from './data/names-zh'
 
 export interface BuildResult {
   scope: Scope
@@ -496,8 +497,8 @@ function assembleContributions(
   charKey: string,
   weaponKey: string | null,
 ): Record<string, ContribRow[]> {
-  const charName = charKey
-  const weaponName = weaponKey ?? '武器'
+  const charName = CHARACTER_NAME_ZH[charKey] ?? charKey
+  const weaponName = weaponKey ? (WEAPON_NAME_ZH[weaponKey] ?? weaponKey) : '武器'
   const nz = (v: number | undefined) => v !== undefined && v !== 0
   const out: Record<string, ContribRow[]> = {}
 
