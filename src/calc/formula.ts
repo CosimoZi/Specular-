@@ -46,8 +46,12 @@ export interface FormulaResult {
   name: string
   move: MoveKey
   element: ElementKey
-  /** Final damage. */
+  /** Expected (avg-crit-mode) damage — the headline number. */
   value: number
+  /** Non-crit damage (critMulti = 1). */
+  nonCrit: number
+  /** Crit damage (critMulti = 1 + CDmg). */
+  crit: number
   /** Breakdown for UI / debugging. */
   breakdown: {
     base: number
@@ -67,13 +71,16 @@ export function evaluateFormula(def: FormulaDef, ctx: FormulaContext): FormulaRe
   const moveBonus = scope.get(`final.dmgMove_.${def.move}`) ?? 0
   const dmgBonus = 1 + eleBonus + moveBonus
 
-  // Crit multi
+  // Crit stats
   const cr = scope.get('cappedCritRate_') ?? 0
   const cd = scope.get('final.critDMG_') ?? 0
-  const critMulti =
-    critMode === 'on' ? 1 + cd :
-    critMode === 'avg' ? 1 + cr * cd :
-    /* off */ 1
+  const critMultiNonCrit = 1
+  const critMultiCrit = 1 + cd
+  const critMultiAvg = 1 + cr * cd
+  const critMultiHeadline =
+    critMode === 'on' ? critMultiCrit :
+    critMode === 'avg' ? critMultiAvg :
+    /* off */ critMultiNonCrit
 
   // Enemy DEF
   const charPart = charLevel + 100
@@ -84,12 +91,18 @@ export function evaluateFormula(def: FormulaDef, ctx: FormulaContext): FormulaRe
   const res = enemy.preRes?.[def.element] ?? 0.1
   const resMulti = res >= 0.75 ? 1 / (1 + 4 * res) : res >= 0 ? 1 - res : 1 - 0.5 * res
 
-  const value = base * dmgBonus * critMulti * defMulti * resMulti
+  // Pre-crit damage — all three crit variants share this factor.
+  const preCrit = base * dmgBonus * defMulti * resMulti
+  const value = preCrit * critMultiHeadline
+  const nonCrit = preCrit * critMultiNonCrit
+  const crit = preCrit * critMultiCrit
   return {
     name: def.name,
     move: def.move,
     element: def.element,
     value,
-    breakdown: { base, dmgBonus, critMulti, defMulti, resMulti },
+    nonCrit,
+    crit,
+    breakdown: { base, dmgBonus, critMulti: critMultiHeadline, defMulti, resMulti },
   }
 }

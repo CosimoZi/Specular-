@@ -32,6 +32,9 @@ export interface ComputedFormula {
   reaction?: string
   /** Per-source contribution rows, attached to panel entries only. */
   contributors?: PanelContribution[]
+  /** Non-crit / crit variants for damage formulas. Undefined for panel entries. */
+  nonCrit?: number
+  crit?: number
 }
 
 export interface PanelContribution {
@@ -166,6 +169,8 @@ export function computeTeamNew(
     value: f.value,
     move: f.move,
     ele: f.element,
+    nonCrit: f.nonCrit,
+    crit: f.crit,
   }))
 
   return {

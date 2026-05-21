@@ -1071,9 +1071,22 @@ function GoPandoPanel({
                           </span>
                         )}
                         <span className="text-zinc-600 dark:text-zinc-400 truncate flex-1">{f.name}</span>
-                        <span className="tabular-nums font-medium text-right flex-shrink-0">
-                          {Math.round(f.value).toLocaleString()}
-                        </span>
+                        <div className="text-right flex-shrink-0 leading-tight">
+                          <div className="tabular-nums font-medium">
+                            {Math.round(f.value).toLocaleString()}
+                          </div>
+                          {(() => {
+                            const ff = f as unknown as { nonCrit?: number; crit?: number }
+                            if (ff.crit == null || ff.nonCrit == null) return null
+                            return (
+                              <div className="text-[10px] tabular-nums text-zinc-500">
+                                <span title="暴击">暴 {Math.round(ff.crit).toLocaleString()}</span>
+                                <span className="mx-1 text-zinc-300 dark:text-zinc-700">|</span>
+                                <span title="未暴击">未暴 {Math.round(ff.nonCrit).toLocaleString()}</span>
+                              </div>
+                            )
+                          })()}
+                        </div>
                       </div>
                     )
                   })}
