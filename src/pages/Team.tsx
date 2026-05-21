@@ -29,6 +29,7 @@ import {
   type Position,
 } from '@/engine/buff-zones'
 import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
+import { computeViaGo } from '@/integration/go-calc'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
@@ -140,6 +141,19 @@ export default function Team() {
   const focusConfig = focusCharId != null ? getConfig(focusCharId) : null
   const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
   const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
+
+  // GO Pando — compute via vendored GenshinOptimizer engine. Only fires when
+  // the focus character has a key mapping in ID_TO_GO_KEY (currently Mona +
+  // a few of the UID-12 set).
+  const goResult = useMemo(() => {
+    if (!focusCharId || !focusConfig) return null
+    return computeViaGo(focusCharId, {
+      level: focusConfig.level,
+      ascension: focusConfig.ascensionStage,
+      constellation: focusConfig.constellation,
+      talents: focusConfig.talentLevels,
+    })
+  }, [focusCharId, focusConfig])
 
   const eligibleBuffs = useMemo(() => {
     const teamIds = team.slots.filter((s): s is number | string => s !== null)
@@ -292,6 +306,27 @@ export default function Team() {
           substatValues={focusState.substatValues}
           t={t}
         />
+      )}
+
+      {goResult && (
+        <section className="border border-indigo-300 dark:border-indigo-800 rounded-lg overflow-hidden">
+          <h3 className="text-sm font-semibold px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-800">
+            via GenshinOptimizer Pando ({goResult.goKey})
+            <span className="ml-3 text-xs font-normal text-zinc-500">
+              Stage 4 PoC — no weapon / artifacts fed yet
+            </span>
+          </h3>
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            {Object.entries(goResult.values).map(([k, v]) => (
+              <div key={k}>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wide">{k}</div>
+                <div className="text-base tabular-nums">
+                  {typeof v === 'number' ? Math.round(v).toLocaleString() : String(v)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {!focusCharId && (

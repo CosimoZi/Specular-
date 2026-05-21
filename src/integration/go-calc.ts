@@ -1,7 +1,4 @@
 // Bridge from our CharacterConfig to GenshinOptimizer's Pando calculator.
-//
-// PoC: Mona only, no weapon/artifact integration yet. We feed bare-minimum char
-// data and read out the damage formulas for verification.
 
 import type { ICharacter } from '@genshin-optimizer/gi/good'
 import {
@@ -19,21 +16,35 @@ import {
  *  expand as we add more characters. */
 export const ID_TO_GO_KEY: Record<string, string> = {
   '10000041': 'Mona',
-  // TODO: fill in for the rest of the 12 UID chars and beyond
+  '10000002': 'Ayaka',          // 神里绫华
+  '10000063': 'Shenhe',         // 申鹤
+  '10000054': 'SangonomiyaKokomi', // 珊瑚宫心海
+  '10000058': 'YaeMiko',        // 八重神子
+  '10000073': 'Nahida',         // 纳西妲
+  '10000089': 'Furina',         // 芙宁娜
+  // TODO: rest of UID 12 (瓦雷莎、法尔伽、爱可菲、莉奈娅、兹白、哥伦比娅 — newer chars may not be in GO yet)
 }
 
-export interface MonaPoCConfig {
+export interface GoCalcConfig {
   level: number // 1..90
   ascension: number // 0..6
   constellation: number // 0..6
   talents: { auto: number; skill: number; burst: number }
 }
 
-/** Compute Mona's listed damage formulas via GO's Pando engine. Returns the
- *  formula name → expected-damage map. */
-export function computeMonaPoc(cfg: MonaPoCConfig): Record<string, number> {
+/** Compute GO-Pando damage / panel values for the given character. Returns
+ *  formula-name → value (e.g. `hp`, `atk`, `def`, `em`, `critRate_`,
+ *  `critDMG_`, plus reaction zones). Returns null if character has no GO key
+ *  mapping (i.e. we haven't whitelisted it yet). */
+export function computeViaGo(
+  characterId: number | string,
+  cfg: GoCalcConfig,
+): { goKey: string; values: Record<string, number> } | null {
+  const goKey = ID_TO_GO_KEY[String(characterId)]
+  if (!goKey) return null
+
   const char: ICharacter = {
-    key: 'Mona' as unknown as ICharacter['key'],
+    key: goKey as unknown as ICharacter['key'],
     level: cfg.level,
     ascension: cfg.ascension,
     constellation: cfg.constellation,
@@ -51,22 +62,31 @@ export function computeMonaPoc(cfg: MonaPoCConfig): Record<string, number> {
     enemyDebuff.common.preRes.add(0.1),
     ownBuff.common.critMode.add('avg'),
   ]
-  const calc = genshinCalculatorWithEntries(data)
+  let calc
+  try {
+    calc = genshinCalculatorWithEntries(data)
+  } catch (e) {
+    console.warn(`[Specular] GO calc init failed for ${goKey}:`, (e as Error).message)
+    return null
+  }
   const mem = calc.withTag({ src: '0' })
 
   const formulas = mem.listFormulas(own.listing.formulas)
-  const out: Record<string, number> = {}
+  const values: Record<string, number> = {}
   for (const f of formulas) {
     const tag = (f as unknown as { tag: { name?: string; q?: string } }).tag
     const name = String(tag?.name ?? tag?.q ?? 'unnamed')
     try {
-      // listFormulas returns Read<Tag_>[] — each entry is itself the NumNode
-      // to compute. (Not { formula, tag }; the Read IS the formula.)
       const val = mem.compute(f as unknown as Parameters<typeof mem.compute>[0]).val
-      if (typeof val === 'number') out[name] = val
-    } catch (e) {
-      console.log(`[Mona PoC] error computing ${name}:`, (e as Error).message)
+      if (typeof val === 'number') values[name] = val
+    } catch {
+      // Skip formulas that need weapon/artifacts (will work once we feed them)
     }
   }
-  return out
+  return { goKey, values }
+}
+
+/** Legacy alias for the Mona-specific test. */
+export function computeMonaPoc(cfg: GoCalcConfig): Record<string, number> {
+  return computeViaGo(10000041, cfg)?.values ?? {}
 }
