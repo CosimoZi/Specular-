@@ -22,7 +22,11 @@
 // shared buffs under it.
 
 import type { CharacterConfig } from '@/data/config-types'
-import { talentValue } from './talent-values'
+import {
+  consBoostActive,
+  effectiveTalentLevel,
+  talentValue,
+} from './talent-values'
 
 export type BuffSourceType =
   | 'normal'
@@ -91,10 +95,12 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
       en: 'Each ally cryo hit consumes one quill: +(Shenhe ATK × skill coef)',
     },
     valueAt: (c) => {
-      const v = talentValue('Shenhe', 'skill', 2, c.talentLevels.skill)
+      const eff = effectiveTalentLevel('Shenhe', 'skill', c)
+      const note = consBoostActive('Shenhe', 'skill', c) ? `（含 C3 +3）` : ''
+      const v = talentValue('Shenhe', 'skill', 2, eff)
       return {
-        zh: `当前: 每次 +${(v * 100).toFixed(1)}% × ATK（E lv.${c.talentLevels.skill}）`,
-        en: `Now: +${(v * 100).toFixed(1)}% × ATK per quill (E lv.${c.talentLevels.skill})`,
+        zh: `当前: 每次 +${(v * 100).toFixed(1)}% × ATK（E lv.${eff}${note}）`,
+        en: `Now: +${(v * 100).toFixed(1)}% × ATK per quill (E lv.${eff}${note ? ' incl. C3 +3' : ''})`,
       }
     },
     condName: 'quillActive',
@@ -159,11 +165,13 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
       en: 'Enemies in Q field: cryo + physical RES shredded (scales with Q talent level)',
     },
     valueAt: (c) => {
-      const v = talentValue('Shenhe', 'burst', 1, c.talentLevels.burst)
+      const eff = effectiveTalentLevel('Shenhe', 'burst', c)
+      const note = consBoostActive('Shenhe', 'burst', c) ? `（含 C5 +3）` : ''
+      const v = talentValue('Shenhe', 'burst', 1, eff)
       return {
         ...fmtPct(v, '-'),
-        zh: `当前: -${(v * 100).toFixed(1)}% 冰抗 / -${(v * 100).toFixed(1)}% 物抗（Q lv.${c.talentLevels.burst}）`,
-        en: `Now: -${(v * 100).toFixed(1)}% cryo / -${(v * 100).toFixed(1)}% phys RES (Q lv.${c.talentLevels.burst})`,
+        zh: `当前: -${(v * 100).toFixed(1)}% 冰抗 / -${(v * 100).toFixed(1)}% 物抗（Q lv.${eff}${note}）`,
+        en: `Now: -${(v * 100).toFixed(1)}% cryo / -${(v * 100).toFixed(1)}% phys RES (Q lv.${eff}${note ? ' incl. C5 +3' : ''})`,
       }
     },
     condName: 'burstField',
