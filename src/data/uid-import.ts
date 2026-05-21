@@ -137,14 +137,21 @@ function parseAvatar(raw: Record<string, unknown>): ImportedCharacter | null {
   const level = parseInt(levelStr, 10) || 1
   const ascensionStage = parseInt(ascensionStr, 10) || ascensionFromLevel(level)
 
-  // Talent levels: Enka sorts by skill id. For most characters this is auto / skill / burst.
-  // Some characters (Wanderer, Ayato) have an "alternate sprint" skill that shows up.
-  // Genshin canonical order: first non-passive skill = auto, last = burst, middle = E skill.
-  const skillIds = Object.keys(skillLevelMap).sort()
+  // Talent levels: Enka's skillLevelMap is keyed by skill id. Characters like
+  // Ayaka / Shenhe / Mona include their alternate sprint (Mistsplitter step,
+  // Springvale Dance, Illusory Torrent — always lvl 1, untrainable) as the
+  // LOWEST skill id. We always want the LAST THREE skills by numeric id =
+  // auto / skill / burst.
+  const skillIdsAsc = Object.keys(skillLevelMap)
+    .map(Number)
+    .filter((n) => !Number.isNaN(n))
+    .sort((a, b) => a - b)
+    .map(String)
+  const combatSkills = skillIdsAsc.slice(-3)
   const talentLevels = {
-    auto: skillIds.length ? skillLevelMap[skillIds[0]] : 1,
-    skill: skillIds.length >= 2 ? skillLevelMap[skillIds[1]] : 1,
-    burst: skillIds.length ? skillLevelMap[skillIds[skillIds.length - 1]] : 1,
+    auto:  combatSkills[0] != null ? skillLevelMap[combatSkills[0]] : 1,
+    skill: combatSkills[1] != null ? skillLevelMap[combatSkills[1]] : 1,
+    burst: combatSkills[2] != null ? skillLevelMap[combatSkills[2]] : 1,
   }
 
   const constellation = talentIdList.length

@@ -107,17 +107,22 @@ export interface GoodCharacter {
 export function configToGoCharacter(config: CharacterConfig): GoodCharacter | null {
   const key = goCharacterKey(config.characterId)
   if (!key) return null
+  // GO's schema clamps level to 1..90. Some Enka responses report 95/100 for
+  // certain newer characters (training mode? trial?), but GO won't accept
+  // those — feed the in-game max.
+  const clampedLevel = Math.min(Math.max(config.level, 1), 90)
+  // Talent levels in-game can be 1..15 (with C3+C5 bumps for some chars).
+  // GO uses 0-indexed and accepts up to 14 (= displayed 15).
+  const clampTalent = (n: number) => Math.max(0, Math.min(14, n - 1))
   return {
     key,
-    level: config.level,
+    level: clampedLevel,
     ascension: config.ascensionStage,
     constellation: config.constellation,
     talent: {
-      // GO talent value = displayed level − 1 (their internal 0-indexed).
-      // We store DISPLAYED levels (1..15 with constellations 3+5 adding bumps).
-      auto: Math.max(0, config.talentLevels.auto - 1),
-      skill: Math.max(0, config.talentLevels.skill - 1),
-      burst: Math.max(0, config.talentLevels.burst - 1),
+      auto: clampTalent(config.talentLevels.auto),
+      skill: clampTalent(config.talentLevels.skill),
+      burst: clampTalent(config.talentLevels.burst),
     },
   }
 }
@@ -129,11 +134,12 @@ export function weaponConfigToGoWeapon(
   if (weapon.weaponId == null) return null
   const key = goWeaponKey(weapon.weaponId)
   if (!key) return null
+  // GO weapon level: 1..90. Refinement: 1..5.
   return {
     key,
-    level: weapon.level,
-    ascension: weapon.ascensionStage,
-    refinement: weapon.refinement,
+    level: Math.min(Math.max(weapon.level, 1), 90),
+    ascension: Math.min(Math.max(weapon.ascensionStage, 0), 6),
+    refinement: Math.min(Math.max(weapon.refinement, 1), 5),
     location,
     lock: false,
   }

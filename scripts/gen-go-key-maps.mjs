@@ -8,7 +8,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 
 function toGoKey(englishName) {
-  return englishName.replace(/[\s'.\-:,!?]/g, '')
+  // GO keys: Title-Case-Every-Word, concatenated, no punctuation.
+  // genshin-db keeps "of"/"the" lowercase AND uses possessive 's
+  //   ("Beginner's Protector", "Night of the Sky's Unveiling").
+  // Apostrophes must be DELETED (not turned into spaces — otherwise the 's
+  //   becomes its own word and 'S' uppercases).
+  // Hyphens / commas / colons act as word separators.
+  return englishName
+    .replace(/['’]/g, '')              // delete straight + typographic apostrophes
+    .replace(/[^A-Za-z0-9\s]/g, ' ')        // other punctuation → space
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
 }
 
 async function loadAllStat() {

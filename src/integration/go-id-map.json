@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-05-21T04:27:58.631Z",
+  "generatedAt": "2026-05-21T04:58:59.039Z",
   "characters": {
     "mapped": 112,
     "goTotal": 114,
     "skipped": 2
   },
   "weapons": {
-    "mapped": 194,
+    "mapped": 231,
     "goTotal": 232,
-    "skipped": 40
+    "skipped": 3
   },
   "artifacts": {
-    "mapped": 40,
+    "mapped": 59,
     "goTotal": 59,
-    "skipped": 19
+    "skipped": 0
   },
   "map": {
     "characters": {
@@ -134,6 +134,7 @@
       "11101": "DullBlade",
       "11201": "SilverSword",
       "11301": "CoolSteel",
+      "11302": "HarbingerOfDawn",
       "11303": "TravelersHandySword",
       "11304": "DarkIronSword",
       "11305": "FilletBlade",
@@ -148,6 +149,7 @@
       "11408": "BlackcliffLongsword",
       "11409": "TheBlackSword",
       "11410": "TheAlleyFlash",
+      "11412": "SwordOfDescension",
       "11413": "FesteringDesire",
       "11414": "AmenomaKageuchi",
       "11415": "CinnabarSpindle",
@@ -156,9 +158,13 @@
       "11418": "XiphosMoonlight",
       "11422": "ToukabouShigure",
       "11424": "WolfFang",
+      "11425": "FinaleOfTheDeep",
       "11426": "FleuveCendreFerryman",
       "11427": "TheDockhandsAssistant",
+      "11428": "SwordOfNarzissenkreuz",
       "11430": "SturdyBone",
+      "11431": "FluteOfEzpitzal",
+      "11432": "CalamityOfEshu",
       "11433": "SerenitysCall",
       "11434": "MoonweaversDawn",
       "11501": "AquilaFavonia",
@@ -168,6 +174,9 @@
       "11505": "PrimordialJadeCutter",
       "11509": "MistsplitterReforged",
       "11510": "HaranGeppakuFutsu",
+      "11511": "KeyOfKhajNisut",
+      "11512": "LightOfFoliarIncision",
+      "11513": "SplendorOfTranquilWaters",
       "11514": "UrakuMisugiri",
       "11515": "Absolution",
       "11516": "PeakPatrolSong",
@@ -200,6 +209,7 @@
       "12418": "MailedFlower",
       "12424": "TalkingStick",
       "12425": "TidalShadow",
+      "12426": "UltimateOverlordsMegaMagicSword",
       "12427": "PortablePowerSaw",
       "12430": "FruitfulHook",
       "12431": "EarthShaker",
@@ -207,10 +217,14 @@
       "12433": "MasterKey",
       "12501": "SkywardPride",
       "12502": "WolfsGravestone",
+      "12503": "SongOfBrokenPines",
       "12504": "TheUnforged",
       "12510": "RedhornStonethresher",
+      "12511": "BeaconOfTheReedSea",
       "12512": "Verdict",
+      "12513": "FangOfTheMountainKing",
       "12514": "AThousandBlazingSuns",
+      "12515": "GestOfTheMightyWolf",
       "13101": "BeginnersProtector",
       "13201": "IronPoint",
       "13301": "WhiteTassel",
@@ -226,26 +240,35 @@
       "13408": "RoyalSpear",
       "13409": "DragonspineSpear",
       "13414": "KitainCrossSpear",
+      "13415": "TheCatch",
       "13416": "WavebreakersFin",
       "13417": "Moonpiercer",
       "13419": "MissiveWindspear",
+      "13424": "BalladOfTheFjords",
       "13425": "RightfulReward",
+      "13426": "DialoguesOfTheDesertSages",
       "13427": "ProspectorsDrill",
       "13430": "MountainBracingBolt",
+      "13431": "FootprintOfTheRainbow",
+      "13432": "TamayurateiNoOhanashi",
       "13433": "ProspectorsShovel",
       "13434": "SacrificersStaff",
+      "13501": "StaffOfHoma",
       "13502": "SkywardSpine",
       "13504": "VortexVanquisher",
       "13505": "PrimordialJadeWingedSpear",
       "13507": "CalamityQueller",
       "13509": "EngulfingLightning",
+      "13511": "StaffOfTheScarletSands",
       "13512": "CrimsonMoonsSemblance",
       "13513": "LumidouceElegy",
+      "13514": "SymphonistOfScents",
       "13515": "FracturedHalo",
       "13516": "BloodsoakedRuins",
       "14101": "ApprenticesNotes",
       "14201": "PocketGrimoire",
       "14301": "MagicGuide",
+      "14302": "ThrillingTalesOfDragonSlayers",
       "14303": "OtherworldlyStory",
       "14304": "EmeraldOrb",
       "14305": "TwinNephrite",
@@ -257,31 +280,40 @@
       "14406": "PrototypeAmber",
       "14407": "MappaMare",
       "14408": "BlackcliffAgate",
+      "14409": "EyeOfPerception",
+      "14410": "WineAndSong",
       "14412": "Frostbearer",
       "14413": "DodocoTales",
       "14414": "HakushinRing",
       "14415": "OathswornEye",
       "14416": "WanderingEvenstar",
+      "14417": "FruitOfFulfillment",
       "14424": "SacrificialJade",
       "14425": "FlowingPurity",
+      "14426": "BalladOfTheBoundlessBlue",
       "14427": "AshGravenDrinkingHorn",
       "14430": "WaveridingWhirl",
+      "14431": "RingOfYaxche",
       "14432": "EtherlightSpindlelute",
       "14433": "BlackmarrowLantern",
       "14434": "DawningFrost",
       "14501": "SkywardAtlas",
+      "14502": "LostPrayerToTheSacredWinds",
+      "14504": "MemoryOfDust",
       "14505": "JadefallsSplendor",
       "14506": "EverlastingMoonglow",
       "14509": "KagurasVerity",
       "14511": "AThousandFloatingDreams",
       "14512": "TulaytullahsRemembrance",
       "14513": "CashflowSupervision",
+      "14514": "TomeOfTheEternalFlow",
       "14515": "CranesEchoingCall",
       "14516": "SurfsUp",
       "14517": "StarcallersWatch",
       "14518": "SunnyMorningSleepIn",
       "14519": "VividNotions",
       "14520": "NightweaversLookingGlass",
+      "14521": "ReliquaryOfTruth",
       "14522": "NocturnesCurtainCall",
       "15101": "HuntersBow",
       "15201": "SeasonedHuntersBow",
@@ -307,15 +339,20 @@
       "15415": "Predator",
       "15416": "MouunsMoon",
       "15417": "KingsSquire",
+      "15418": "EndOfTheLine",
       "15419": "IbisPiercer",
+      "15424": "ScionOfTheBlazingSun",
+      "15425": "SongOfStillness",
       "15426": "Cloudforged",
       "15427": "RangeGauge",
       "15430": "FlowerWreathedFeathers",
       "15431": "ChainBreaker",
+      "15432": "SequenceOfSolitude",
       "15433": "SnareHook",
       "15434": "RainbowSerpentsRainBow",
       "15501": "SkywardHarp",
       "15502": "AmosBow",
+      "15503": "ElegyForTheEnd",
       "15507": "PolarStar",
       "15508": "AquaSimulacra",
       "15509": "ThunderingPulse",
@@ -327,6 +364,7 @@
       "15516": "GoldenFrostboundOath"
     },
     "artifacts": {
+      "10001": "ResolutionOfSojourner",
       "10002": "BraveHeart",
       "10003": "DefendersWill",
       "10004": "TinyMiracle",
@@ -347,25 +385,43 @@
       "15002": "ViridescentVenerer",
       "15003": "WanderersTroupe",
       "15005": "ThunderingFury",
+      "15006": "CrimsonWitchOfFlames",
       "15007": "NoblesseOblige",
       "15008": "BloodstainedChivalry",
+      "15009": "PrayersForIllumination",
+      "15010": "PrayersForDestiny",
+      "15011": "PrayersForWisdom",
+      "15013": "PrayersToSpringtime",
       "15014": "ArchaicPetra",
       "15015": "RetracingBolide",
+      "15016": "HeartOfDepth",
+      "15017": "TenacityOfTheMillelith",
       "15018": "PaleFlame",
       "15019": "ShimenawasReminiscence",
+      "15020": "EmblemOfSeveredFate",
+      "15021": "HuskOfOpulentDreams",
       "15022": "OceanHuedClam",
       "15023": "VermillionHereafter",
+      "15024": "EchoesOfAnOffering",
       "15025": "DeepwoodMemories",
       "15026": "GildedDreams",
       "15027": "DesertPavilionChronicle",
+      "15028": "FlowerOfParadiseLost",
       "15029": "NymphsDream",
       "15030": "VourukashasGlow",
       "15031": "MarechausseeHunter",
       "15032": "GoldenTroupe",
+      "15033": "SongOfDaysPast",
+      "15034": "NighttimeWhispersInTheEchoingWoods",
+      "15035": "FragmentOfHarmonicWhimsy",
       "15036": "UnfinishedReverie",
+      "15037": "ScrollOfTheHeroOfCinderCity",
       "15038": "ObsidianCodex",
       "15039": "LongNightsOath",
+      "15040": "FinaleOfTheDeepGalleries",
+      "15041": "NightOfTheSkysUnveiling",
       "15042": "SilkenMoonsSerenade",
+      "15043": "AubadeOfMorningstarAndMoon",
       "15044": "ADayCarvedFromRisingWinds"
     }
   },
@@ -384,101 +440,6 @@
     ],
     "skippedWeapons": [
       {
-        "id": 14426,
-        "enName": "Ballad of the Boundless Blue",
-        "attempted": "BalladoftheBoundlessBlue"
-      },
-      {
-        "id": 13424,
-        "enName": "Ballad of the Fjords",
-        "attempted": "BalladoftheFjords"
-      },
-      {
-        "id": 12511,
-        "enName": "Beacon of the Reed Sea",
-        "attempted": "BeaconoftheReedSea"
-      },
-      {
-        "id": 11432,
-        "enName": "Calamity of Eshu",
-        "attempted": "CalamityofEshu"
-      },
-      {
-        "id": 13426,
-        "enName": "Dialogues of the Desert Sages",
-        "attempted": "DialoguesoftheDesertSages"
-      },
-      {
-        "id": 15503,
-        "enName": "Elegy for the End",
-        "attempted": "ElegyfortheEnd"
-      },
-      {
-        "id": 15418,
-        "enName": "End of the Line",
-        "attempted": "EndoftheLine"
-      },
-      {
-        "id": 14409,
-        "enName": "Eye of Perception",
-        "attempted": "EyeofPerception"
-      },
-      {
-        "id": 12513,
-        "enName": "Fang of the Mountain King",
-        "attempted": "FangoftheMountainKing"
-      },
-      {
-        "id": 11425,
-        "enName": "Finale of the Deep",
-        "attempted": "FinaleoftheDeep"
-      },
-      {
-        "id": 11431,
-        "enName": "Flute of Ezpitzal",
-        "attempted": "FluteofEzpitzal"
-      },
-      {
-        "id": 13431,
-        "enName": "Footprint of the Rainbow",
-        "attempted": "FootprintoftheRainbow"
-      },
-      {
-        "id": 14417,
-        "enName": "Fruit of Fulfillment",
-        "attempted": "FruitofFulfillment"
-      },
-      {
-        "id": 12515,
-        "enName": "Gest of the Mighty Wolf",
-        "attempted": "GestoftheMightyWolf"
-      },
-      {
-        "id": 11302,
-        "enName": "Harbinger of Dawn",
-        "attempted": "HarbingerofDawn"
-      },
-      {
-        "id": 11511,
-        "enName": "Key of Khaj-Nisut",
-        "attempted": "KeyofKhajNisut"
-      },
-      {
-        "id": 11512,
-        "enName": "Light of Foliar Incision",
-        "attempted": "LightofFoliarIncision"
-      },
-      {
-        "id": 14502,
-        "enName": "Lost Prayer to the Sacred Winds",
-        "attempted": "LostPrayertotheSacredWinds"
-      },
-      {
-        "id": 14504,
-        "enName": "Memory of Dust",
-        "attempted": "MemoryofDust"
-      },
-      {
         "id": 11419,
         "enName": "Prized Isshin Blade",
         "attempted": "PrizedIsshinBlade"
@@ -492,144 +453,8 @@
         "id": 11419,
         "enName": "Prized Isshin Blade",
         "attempted": "PrizedIsshinBlade"
-      },
-      {
-        "id": 14521,
-        "enName": "Reliquary of Truth",
-        "attempted": "ReliquaryofTruth"
-      },
-      {
-        "id": 14431,
-        "enName": "Ring of Yaxche",
-        "attempted": "RingofYaxche"
-      },
-      {
-        "id": 15424,
-        "enName": "Scion of the Blazing Sun",
-        "attempted": "ScionoftheBlazingSun"
-      },
-      {
-        "id": 15432,
-        "enName": "Sequence of Solitude",
-        "attempted": "SequenceofSolitude"
-      },
-      {
-        "id": 12503,
-        "enName": "Song of Broken Pines",
-        "attempted": "SongofBrokenPines"
-      },
-      {
-        "id": 15425,
-        "enName": "Song of Stillness",
-        "attempted": "SongofStillness"
-      },
-      {
-        "id": 11513,
-        "enName": "Splendor of Tranquil Waters",
-        "attempted": "SplendorofTranquilWaters"
-      },
-      {
-        "id": 13501,
-        "enName": "Staff of Homa",
-        "attempted": "StaffofHoma"
       }
     ],
-    "skippedArtifacts": [
-      {
-        "id": 15043,
-        "enName": "Aubade of Morningstar and Moon",
-        "attempted": "AubadeofMorningstarandMoon"
-      },
-      {
-        "id": 15006,
-        "enName": "Crimson Witch of Flames",
-        "attempted": "CrimsonWitchofFlames"
-      },
-      {
-        "id": 15024,
-        "enName": "Echoes of an Offering",
-        "attempted": "EchoesofanOffering"
-      },
-      {
-        "id": 15020,
-        "enName": "Emblem of Severed Fate",
-        "attempted": "EmblemofSeveredFate"
-      },
-      {
-        "id": 15040,
-        "enName": "Finale of the Deep Galleries",
-        "attempted": "FinaleoftheDeepGalleries"
-      },
-      {
-        "id": 15028,
-        "enName": "Flower of Paradise Lost",
-        "attempted": "FlowerofParadiseLost"
-      },
-      {
-        "id": 15035,
-        "enName": "Fragment of Harmonic Whimsy",
-        "attempted": "FragmentofHarmonicWhimsy"
-      },
-      {
-        "id": 15016,
-        "enName": "Heart of Depth",
-        "attempted": "HeartofDepth"
-      },
-      {
-        "id": 15021,
-        "enName": "Husk of Opulent Dreams",
-        "attempted": "HuskofOpulentDreams"
-      },
-      {
-        "id": 15041,
-        "enName": "Night of the Sky's Unveiling",
-        "attempted": "NightoftheSkysUnveiling"
-      },
-      {
-        "id": 15034,
-        "enName": "Nighttime Whispers in the Echoing Woods",
-        "attempted": "NighttimeWhispersintheEchoingWoods"
-      },
-      {
-        "id": 15010,
-        "enName": "Prayers for Destiny",
-        "attempted": "PrayersforDestiny"
-      },
-      {
-        "id": 15009,
-        "enName": "Prayers for Illumination",
-        "attempted": "PrayersforIllumination"
-      },
-      {
-        "id": 15011,
-        "enName": "Prayers for Wisdom",
-        "attempted": "PrayersforWisdom"
-      },
-      {
-        "id": 15013,
-        "enName": "Prayers to Springtime",
-        "attempted": "PrayerstoSpringtime"
-      },
-      {
-        "id": 10001,
-        "enName": "Resolution of Sojourner",
-        "attempted": "ResolutionofSojourner"
-      },
-      {
-        "id": 15037,
-        "enName": "Scroll of the Hero of Cinder City",
-        "attempted": "ScrolloftheHeroofCinderCity"
-      },
-      {
-        "id": 15033,
-        "enName": "Song of Days Past",
-        "attempted": "SongofDaysPast"
-      },
-      {
-        "id": 15017,
-        "enName": "Tenacity of the Millelith",
-        "attempted": "TenacityoftheMillelith"
-      }
-    ]
+    "skippedArtifacts": []
   }
 }
