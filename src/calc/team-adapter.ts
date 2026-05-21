@@ -12,6 +12,7 @@ import { buildCharacter } from './build'
 import { goCharacterKey } from '@/integration/good-adapter'
 import { characterSheets } from './sheets'
 import type { CondState } from './sheet-types'
+import { charDataRaw } from './data/curves'
 
 export interface TeamMemberInput {
   config: CharacterConfig
@@ -130,9 +131,14 @@ export function computeTeamNew(
     { name: 'cappedCritRate_', value: r.panel.cappedCritRate_, move: 'panel' },
     { name: 'critDMG_', value: r.panel.critDMG_, move: 'panel' },
   ]
-  // Element-specific DMG bonus (only show the non-zero ones to keep it clean).
-  for (const [ele, val] of Object.entries(r.panel.dmg_)) {
-    if (val > 0) panel.push({ name: `${ele}_dmg_`, value: val, move: 'panel', ele })
+  // DMG bonus — only the character's own element. (Showing all 8 was noisy and
+  // mostly irrelevant: e.g. a polearm cryo character cares about cryo + maybe
+  // physical, not pyro/hydro/etc.) Physical is included when it's non-zero —
+  // for polearm/sword/claymore/bow characters whose normals are physical.
+  const charEle = charDataRaw(goCharKey).ele as keyof typeof r.panel.dmg_
+  panel.push({ name: `${charEle}_dmg_`, value: r.panel.dmg_[charEle], move: 'panel', ele: charEle })
+  if (charEle !== 'physical' && r.panel.dmg_.physical > 0) {
+    panel.push({ name: 'physical_dmg_', value: r.panel.dmg_.physical, move: 'panel', ele: 'physical' })
   }
 
   const damage: ComputedFormula[] = r.formulas.map((f) => ({

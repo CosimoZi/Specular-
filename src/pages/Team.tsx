@@ -740,12 +740,24 @@ function FinalStat({ label, value }: { label: string; value: string }) {
 // Output panels — focus-character stats + per-talent damage + substat margins
 // ============================================================================
 
-const PANEL_ORDER = ['hp', 'atk', 'def', 'eleMas', 'cappedCritRate_', 'critDMG_', 'enerRech_', 'dmg_', 'heal_']
-const PANEL_LABELS: Record<string, string> = {
-  hp: 'HP', atk: 'ATK', def: 'DEF', eleMas: 'EM',
-  enerRech_: 'ER', cappedCritRate_: 'CR', critDMG_: 'CD',
-  dmg_: 'DMG%', heal_: 'Healing',
+const PANEL_ORDER = ['hp', 'atk', 'def', 'eleMas', 'cappedCritRate_', 'critDMG_', 'enerRech_', 'heal_']
+// Per-element dmg_ keys (pyro_dmg_, cryo_dmg_, …) sort after the fixed panel
+// stats. We rank them last via a high index.
+const ELE_DMG_RE = /^([a-z]+)_dmg_$/
+
+function panelLabel(name: string, t: (k: string, f?: string) => string): string {
+  const m = ELE_DMG_RE.exec(name)
+  if (m) return t(`panel.dmg_.${m[1]}`, name)
+  return t(`panel.${name}`, name)
 }
+function panelOrderIdx(name: string): number {
+  const i = PANEL_ORDER.indexOf(name)
+  if (i >= 0) return i
+  // element-dmg_ keys sort after the fixed slots.
+  if (ELE_DMG_RE.test(name)) return PANEL_ORDER.length
+  return PANEL_ORDER.length + 1
+}
+
 function formatPanelValue(k: string, v: number): string {
   if (k.endsWith('_')) return `${(v * 100).toFixed(1)}%`
   return Math.round(v).toLocaleString()
@@ -847,7 +859,7 @@ function GoPandoPanel({
       ;(byMove[f.move] ||= []).push(f)
     }
   }
-  panelEntries.sort((a, b) => PANEL_ORDER.indexOf(a.name) - PANEL_ORDER.indexOf(b.name))
+  panelEntries.sort((a, b) => panelOrderIdx(a.name) - panelOrderIdx(b.name))
 
   return (
     <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
@@ -863,7 +875,7 @@ function GoPandoPanel({
         {panelEntries.map(({ name, value }) => (
           <FinalStat
             key={name}
-            label={PANEL_LABELS[name] ?? name}
+            label={panelLabel(name, t)}
             value={formatPanelValue(name, value)}
           />
         ))}
