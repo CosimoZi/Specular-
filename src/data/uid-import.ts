@@ -303,7 +303,17 @@ export interface ImportResult {
   fetchedAt: number
 }
 
-const ENKA_BASE = 'https://enka.network/api/uid'
+// Enka.Network's API does NOT return `Access-Control-Allow-Origin` so browser
+// fetches from a different origin (like our deploy) fail with a CORS error.
+// We route through corsproxy.io which adds the header. Order = preferences:
+// each is tried until one succeeds.
+const ENKA_DIRECT = 'https://enka.network/api/uid'
+const PROXIED_ENDPOINTS = (uid: string) => [
+  `https://corsproxy.io/?url=${encodeURIComponent(`${ENKA_DIRECT}/${uid}`)}`,
+  // Fallback: direct call. Works on dev (vite proxy) or if user has a CORS-
+  // disable extension. Will fail in normal production browser.
+  `${ENKA_DIRECT}/${uid}`,
+]
 
 const CACHE_KEY = 'specular-enka-cache'
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -331,16 +341,30 @@ export async function fetchEnkaUid(uid: string): Promise<ImportResult> {
   const region = regionFromUid(uid)
   if (region === 'unknown') throw new Error('UID format invalid')
 
-  // For CN bilibili (5xxxxxxxx), enka.network may not work; document this in UI later.
-  const url = `${ENKA_BASE}/${encodeURIComponent(uid)}`
-  const res = await fetch(url)
-  if (!res.ok) {
-    if (res.status === 400) throw new Error('UID format rejected by Enka (400)')
-    if (res.status === 404) throw new Error('UID not found on Enka (404). For BiliBili 国服 UIDs (starting with 5), Enka may not have data.')
-    if (res.status === 424) throw new Error('Account exists but character showcase is empty (424). Enable Character Showcase in-game.')
-    if (res.status === 429) throw new Error('Rate-limited by Enka (429). Try again in a minute.')
-    throw new Error(`Enka HTTP ${res.status}`)
+  // Try each endpoint in order. corsproxy.io first (works in production),
+  // direct enka.network as fallback (only works in dev / extension-disabled).
+  const endpoints = PROXIED_ENDPOINTS(encodeURIComponent(uid))
+  let res: Response | null = null
+  let lastErr: Error | null = null
+  for (const url of endpoints) {
+    try {
+      res = await fetch(url)
+      if (res.ok) break
+      // Treat 4xx as definitive — no point trying other proxies.
+      if (res.status >= 400 && res.status < 500) {
+        if (res.status === 400) throw new Error('UID format rejected by Enka (400)')
+        if (res.status === 404) throw new Error('UID not found on Enka (404). For BiliBili 国服 UIDs (starting with 5), Enka may not have data.')
+        if (res.status === 424) throw new Error('Account exists but character showcase is empty (424). Enable Character Showcase in-game.')
+        if (res.status === 429) throw new Error('Rate-limited (429). Try again in a minute.')
+      }
+      lastErr = new Error(`Enka via ${url}: HTTP ${res.status}`)
+      res = null
+    } catch (e) {
+      lastErr = e as Error
+      res = null
+    }
   }
+  if (!res) throw lastErr ?? new Error('Failed to reach Enka (all proxies down).')
   const body = await res.json()
 
   const playerInfo = body.playerInfo ?? {}
