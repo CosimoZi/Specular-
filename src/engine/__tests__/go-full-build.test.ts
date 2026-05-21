@@ -1,7 +1,7 @@
 // Verify GO Pando works with a complete character config including weapon
 // and artifacts — mimics what UID import produces.
 import { describe, it, expect } from 'vitest'
-import { computeViaGo } from '../../integration/go-calc'
+import { computeViaGo, computeSubstatMarginsViaGo } from '../../integration/go-calc'
 import { defaultConfig, type ArtifactPiece } from '@/data/config-types'
 
 describe('GO Pando — full character build', () => {
@@ -104,5 +104,52 @@ describe('GO Pando — full character build', () => {
     // critDMG and cryo_dmg_ may not surface in listFormulas if no formula uses them;
     // we'll check the damage formula values instead.
     expect(out!.values.normal1).toBeGreaterThan(1000) // N1 has positive damage
+  })
+
+  it('substat marginal values for built Ayaka (CR > everything else)', () => {
+    const config = {
+      ...defaultConfig(10000002),
+      weapon: { weaponId: 11509, level: 90, ascensionStage: 6, refinement: 1 },
+      artifacts: {
+        flower: { setId: 15031, slot: 'flower', rarity: 5, level: 20, mainStat: 'hpFlat',
+          substats: [
+            { key: 'critRate', value: 0.078 }, { key: 'critDmg', value: 0.062 },
+            { key: 'atkPct', value: 0.152 }, { key: 'em', value: 16 },
+          ] } as ArtifactPiece,
+        plume: { setId: 15031, slot: 'plume', rarity: 5, level: 20, mainStat: 'atkFlat',
+          substats: [
+            { key: 'critRate', value: 0.07 }, { key: 'critDmg', value: 0.194 },
+            { key: 'hpFlat', value: 239 }, { key: 'er', value: 0.117 },
+          ] } as ArtifactPiece,
+        sands: { setId: 15031, slot: 'sands', rarity: 5, level: 20, mainStat: 'atkPct',
+          substats: [
+            { key: 'critRate', value: 0.101 }, { key: 'critDmg', value: 0.202 },
+            { key: 'er', value: 0.058 }, { key: 'defFlat', value: 44 },
+          ] } as ArtifactPiece,
+        goblet: { setId: 15031, slot: 'goblet', rarity: 5, level: 20, mainStat: 'cryoDmg',
+          substats: [
+            { key: 'critDmg', value: 0.21 }, { key: 'critRate', value: 0.062 },
+            { key: 'defPct', value: 0.124 }, { key: 'atkPct', value: 0.099 },
+          ] } as ArtifactPiece,
+        circlet: { setId: 15022, slot: 'circlet', rarity: 5, level: 20, mainStat: 'critDmg',
+          substats: [
+            { key: 'defPct', value: 0.117 }, { key: 'critRate', value: 0.101 },
+            { key: 'atkPct', value: 0.117 }, { key: 'er', value: 0.065 },
+          ] } as ArtifactPiece,
+      },
+      talentLevels: { auto: 10, skill: 10, burst: 10 },
+      lastModified: Date.now(),
+    }
+    const margins = computeSubstatMarginsViaGo(config)
+    expect(margins).not.toBeNull()
+    expect(margins!.margins.length).toBe(10) // all 10 substats evaluated
+
+    console.log(`=== Ayaka substat margins (baseline ${margins!.baselineFormula}=${Math.round(margins!.baselineValue)}) ===`)
+    for (const m of margins!.margins) {
+      console.log(`  ${m.substat.padEnd(12)} ${m.absoluteDelta >= 0 ? '+' : ''}${m.absoluteDelta.toFixed(1).padStart(8)}  ${m.pctDelta >= 0 ? '+' : ''}${m.pctDelta.toFixed(2)}%`)
+    }
+
+    // Sanity: top margin should be positive
+    expect(margins!.margins[0].absoluteDelta).toBeGreaterThan(0)
   })
 })
