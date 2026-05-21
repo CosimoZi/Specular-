@@ -210,8 +210,10 @@ export default function Team() {
       {goResult && (
         <GoPandoPanel
           result={goResult}
+          focusIdx={focusCharId != null ? getCharacterIndex(focusCharId) ?? null : null}
           pinnedFormula={pinnedFormula}
           onPinFormula={setPinnedFormula}
+          locale={locale}
           t={t}
         />
       )}
@@ -737,16 +739,72 @@ const MOVE_GROUP_ORDER: Array<{ key: GoComputeResult['formulas'][number]['move']
   { key: 'other', labelKey: 'damage.group.other' },
 ]
 
+type ElementSlug = 'pyro' | 'hydro' | 'cryo' | 'electro' | 'anemo' | 'geo' | 'dendro' | 'physical'
+
+const ELEMENT_LABEL_ZH: Record<ElementSlug, string> = {
+  pyro: '火', hydro: '水', cryo: '冰', electro: '雷',
+  anemo: '风', geo: '岩', dendro: '草', physical: '物',
+}
+const ELEMENT_LABEL_EN: Record<ElementSlug, string> = {
+  pyro: 'Pyro', hydro: 'Hydro', cryo: 'Cryo', electro: 'Electro',
+  anemo: 'Anemo', geo: 'Geo', dendro: 'Dendro', physical: 'Phys',
+}
+const ELEMENT_BADGE_CLASS: Record<ElementSlug, string> = {
+  pyro:     'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+  hydro:    'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
+  cryo:     'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300',
+  electro:  'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
+  anemo:    'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
+  geo:      'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+  dendro:   'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+  physical: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+}
+
+/** Resolve a formula's display element based on character weapon type, the
+ *  formula's move, and any pre-tagged reaction element. Mirrors the same
+ *  defaulting logic the Pando engine uses in dmg() → customDmg.
+ *
+ *  This is the BASE element. Infusion (e.g. teammate-driven cryo infusion
+ *  on a polearm user) isn't modeled here yet — would need a runtime read
+ *  of own.reaction.infusion per formula. */
+function formulaElement(
+  f: GoComputeResult['formulas'][number],
+  charElement: string | null,
+  weaponType: string | null,
+): ElementSlug | null {
+  if (f.move === 'reaction') {
+    // Reactions tag their element on the formula directly.
+    const e = (f.ele ?? '').toLowerCase()
+    if (e === 'pyro' || e === 'hydro' || e === 'cryo' || e === 'electro' ||
+        e === 'anemo' || e === 'geo' || e === 'dendro' || e === 'physical') return e
+    return null
+  }
+  if (f.move === 'skill' || f.move === 'burst') {
+    return (charElement?.toLowerCase() as ElementSlug) || null
+  }
+  if (f.move === 'normal' || f.move === 'charged' || f.move === 'plunging') {
+    // Catalyst normals are character-elemental; everyone else is physical
+    // (unless infused, which we don't model here).
+    if (weaponType === 'WEAPON_CATALYST') return (charElement?.toLowerCase() as ElementSlug) || null
+    return 'physical'
+  }
+  return null
+}
+
 /** Focus-character stats + per-move damage breakdown. Each move group is
  *  collapsible. Clicking 📌 on a formula pins it as the substat-margin target. */
 function GoPandoPanel({
-  result, pinnedFormula, onPinFormula, t,
+  result, focusIdx, pinnedFormula, onPinFormula, locale, t,
 }: {
   result: GoComputeResult
+  focusIdx: { element: string; weaponType: string } | null
   pinnedFormula: string | null
   onPinFormula: (name: string | null) => void
+  locale: 'zh' | 'en'
   t: (k: string, f?: string) => string
 }) {
+  const charElement = focusIdx?.element ?? null
+  const weaponType = focusIdx?.weaponType ?? null
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(['skill', 'burst', 'reaction']),
   )
@@ -814,6 +872,7 @@ function GoPandoPanel({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-4 pb-3">
                   {list.map((f) => {
                     const isPinned = pinnedFormula === f.name
+                    const ele = formulaElement(f, charElement, weaponType)
                     return (
                       <div
                         key={f.name}
@@ -834,6 +893,14 @@ function GoPandoPanel({
                         >
                           {isPinned ? '📌' : '📍'}
                         </button>
+                        {ele && (
+                          <span
+                            className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${ELEMENT_BADGE_CLASS[ele]}`}
+                            title={t('damage.elementBadgeHint')}
+                          >
+                            {(locale === 'en' ? ELEMENT_LABEL_EN : ELEMENT_LABEL_ZH)[ele]}
+                          </span>
+                        )}
                         <span className="text-zinc-600 dark:text-zinc-400 truncate flex-1">{f.name}</span>
                         <span className="tabular-nums font-medium text-right flex-shrink-0">
                           {Math.round(f.value).toLocaleString()}

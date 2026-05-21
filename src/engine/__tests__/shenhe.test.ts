@@ -67,6 +67,25 @@ describe('Shenhe — hand-wired sheet', () => {
     }
   })
 
+  it('A1 cryo DMG bonus boosts Shenhe skill (cryo) but NOT her polearm normal (physical)', () => {
+    // Shenhe is a polearm user → her N1..N4 + charged + plunging default to
+    // physical damage. Her A1 teamBuff is +15% cryo DMG only. The buff must
+    // therefore lift skill_press / burst (cryo) but leave normal_0 untouched.
+    const sh = shenheConfig()
+    const off = computeTeamViaGo([{ config: sh }, null, null, null], 0)
+    const on = computeTeamViaGo([{ config: sh }, null, null, null], 0, {
+      condState: { '0': { Shenhe: { burstField: 1 } } },
+    })
+    expect(off).not.toBeNull()
+    expect(on).not.toBeNull()
+    // Skill press is cryo — should be boosted by A1's +15% cryo DMG.
+    expect(on!.values.skill_press).toBeGreaterThan(off!.values.skill_press)
+    // Normal_0 is physical (polearm default) — should be unchanged.
+    expect(on!.values.normal_0).toBeCloseTo(off!.values.normal_0, 0)
+    // Charged + plunging are also physical.
+    expect(on!.values.charged).toBeCloseTo(off!.values.charged, 0)
+  })
+
   it('A4 hold dmg_ buffs Ayaka normal hit', () => {
     // A4 hold buff applies +X% dmg to all party members' normal/charged/
     // plunging attacks. With Ayaka in slot 1, her `normal1` formula should

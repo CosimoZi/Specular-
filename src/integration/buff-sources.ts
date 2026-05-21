@@ -112,8 +112,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰元素伤害加成', en: 'Cryo DMG bonus' },
     effect: {
-      zh: 'Q 场内单挂角色 +15% 冰元素伤害（固定值）',
-      en: 'Active char in Q field: +15% Cryo DMG (constant)',
+      zh: 'Q 场内单挂角色 +15% 冰元素伤害。只影响冰元素伤害 —— 申鹤本人的普攻/重击/下落是物理，不吃这个 buff（除非被队友附魔成冰）。',
+      en: 'Active char in Q field: +15% Cryo DMG. Cryo-only — Shenhe\'s own polearm normals/charged/plunging are physical and don\'t benefit unless infused by a teammate.',
     },
     condName: 'burstField',
   },
@@ -149,8 +149,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰元素暴击伤害', en: 'Cryo CRIT DMG' },
     effect: {
-      zh: 'Q 场内单挂角色 +15% 冰元素暴击伤害（与 A1 共用 Q 场内触发，固定值）',
-      en: 'Active char in Q field: +15% cryo CRIT DMG (shares burst-field trigger; constant)',
+      zh: 'Q 场内单挂角色 +15% 冰元素暴击伤害。和 A1 共用 Q 场内触发，同样只对冰元素伤害生效。',
+      en: 'Active char in Q field: +15% cryo CRIT DMG. Shares burst-field trigger with A1; same cryo-only scope.',
     },
     condName: 'burstField',
   },
