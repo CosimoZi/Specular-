@@ -12,7 +12,7 @@
 // damage formulas tied to its companion mode; the heal-burst doesn't enter
 // damage panel anyway. TODO once we model companion-side damage + heals.
 
-import { prod, sum, lookup, v, sub, type Node } from '../ast'
+import { prod, sum, lookup, v, sub, c, type Node } from '../ast'
 import type { FormulaDef } from '../formula'
 import statsJson from '../../../vendor/go/gi/stats/src/allStat_gen.json'
 
@@ -35,16 +35,39 @@ export const LinneaFormulas: FormulaDef[] = [
   { name: 'plunging_dmg', move: 'plunging', element: 'physical', base: atkProd(skillParam.auto[5]!, 'talent.auto') },
   { name: 'plunging_low', move: 'plunging', element: 'physical', base: atkProd(skillParam.auto[6]!, 'talent.auto') },
   { name: 'plunging_high', move: 'plunging', element: 'physical', base: atkProd(skillParam.auto[7]!, 'talent.auto') },
+  // 月结晶 reaction: triggered by hydro+geo on enemy after A6.
+  //   transformative-base × 1.8 (handled by formula evaluator)
+  //   + DEF × 75% × stacks (C1 stack-consume flat add, expressed in `base`)
+  //   × (1 + 精通增益 + 反应提升) × crit × res
+  // 反应提升 lives in scope.premod.moonReactionBoost (A6 adds DEF/100 × 0.7%).
+  {
+    name: 'moon_crystallize',
+    move: 'skill',
+    element: 'geo',
+    kind: 'reactionMoon',
+    base: prod(v('final.def'), v('cond.Linnea.c1StacksConsumed', 0), c(0.75)),
+  },
 ]
 
 export function applyLinneaFormulaBuffs(
-  _scope: import('../scope').Scope,
+  scope: import('../scope').Scope,
   _condState: Record<string, Record<string, number>>,
 ) {
-  // Linnea has no damage-side buffs that gate by element/move at the formula
-  // level (her stat-only buffs C2/C4 live in Linnea.ts apply()). A4/A6/C1/C6
-  // need engine extensions (cross-char EM, moon-reaction layer, companion
-  // damage) so they're TODO.
+  const ascension = scope.get('ascension') ?? 0
+  // A6 (ascension 6): per 100 DEF, +0.7% moon-reaction base damage, cap +14%.
+  // 反应提升 — accumulates into premod.moonReactionBoost which the moon-reaction
+  // formula evaluator reads alongside 精通增益.
+  if (ascension >= 6) {
+    const def = scope.get('final.def') ?? 0
+    const boost = Math.min(0.14, (def / 100) * 0.007)
+    if (boost > 0) {
+      scope.add('premod.moonReactionBoost', boost, `A6 月兆祝赐(DEF ${Math.round(def)} → +${(boost * 100).toFixed(1)}% 月反应增伤)`)
+    }
+  }
+  // C6: 月结晶反应 +25% damage. Modeled as reaction-boost.
+  if ((scope.get('constellation') ?? 0) >= 6) {
+    scope.add('premod.moonReactionBoost', 0.25, 'C6 黄金猎犬之梦(月结晶 +25%)')
+  }
 }
 
 /** A1 RES shred on enemy: -15% geo RES while Lumi is out;

@@ -33,11 +33,9 @@ export const Linnea: CharacterSheet = {
     { name: 'moonFull', type: 'bool', label: 'A1 月兆·满辉(露米召出后岩抗再 -15%)' },
     { name: 'c2Resonance', type: 'bool', label: 'C2 月笼谐奏(水/岩 暴击伤害 +40%)' },
     { name: 'c4DefStacks', type: 'num', label: 'C4 月笼谐奏(DEF +25%/层 最多 2)', intOnly: true, min: 0, max: 2 },
-    // TODO (needs engine extension):
+    { name: 'c1StacksConsumed', type: 'num', label: 'C1 历览编录消耗层数(每层月结晶 +DEF×75% flat)', intOnly: true, min: 0, max: 18 },
+    // TODO (still needs engine extension):
     // - A4: DEF×5% → 场上角色 EM (cross-character buff propagation needed)
-    // - A6: DEF/100 × 0.7% → 月结晶 reaction base DMG (cap 14%, moon-reaction layer)
-    // - C1: 历览编录 stacks → 月结晶 dmg += DEF × 75% (moon-reaction layer)
-    // - C6: stacks 增强 + 月结晶 +25% (same)
     // - Burst heal (DEF-scaling) — not a damage formula
     // - Skill: Lumi 形态切换 + 攻击 (companion-damage layer needed)
   ],
