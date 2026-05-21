@@ -72,7 +72,8 @@ export function characterCurve(curveName: string, level: number): number {
 }
 
 /** Default ascension stage for a level (matches in-game progression).
- *  Each ascension unlocks +5 levels: 20→40→50→60→70→80→90. */
+ *  Each ascension unlocks +5 levels: 20→40→50→60→70→80→90.
+ *  Genshin 5.7's "Crowning of Insight" extends ascension 6's cap to 100. */
 export function defaultAscensionFor(level: number): number {
   if (level <= 20) return 0
   if (level <= 40) return 1
@@ -83,7 +84,8 @@ export function defaultAscensionFor(level: number): number {
   return 6
 }
 
-/** Highest level reachable at a given ascension stage. */
+/** Highest level reachable at a given ascension stage.
+ *  Genshin 5.7+: ascension 6 cap raised from 90 → 100 (Crown of Insight). */
 export const MAX_LEVEL_BY_ASCENSION: Record<number, number> = {
   0: 20,
   1: 40,
@@ -91,5 +93,5 @@ export const MAX_LEVEL_BY_ASCENSION: Record<number, number> = {
   3: 60,
   4: 70,
   5: 80,
-  6: 90,
+  6: 100,
 }

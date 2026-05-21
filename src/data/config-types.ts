@@ -59,7 +59,7 @@ export interface WeaponConfig {
 
 export interface CharacterConfig {
   characterId: number | string
-  level: number // 1..90
+  level: number // 1..100 (Genshin 5.7+ raised cap from 90 → 100)
   ascensionStage: number // 0..6
   constellation: number // 0..6
   talentLevels: { auto: number; skill: number; burst: number }

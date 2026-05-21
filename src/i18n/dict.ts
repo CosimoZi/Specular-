@@ -11,8 +11,9 @@ export const LOCALES: Array<{ code: Locale; label: string }> = [
 export const DICT: Record<Locale, Record<string, string>> = {
   zh: {
     'app.title': 'Specular',
-    'app.tagline': '把你的角色看作镜中的他者 — 伤害计算 / 词条评估 / 配队模拟。',
-    'app.subtagline': 'spec·u·lar · 镜的、反射的 · 出自拉康的 specular image',
+    'app.tagline': '其智如水，善利万物，为镜自省。',
+    'app.subtagline':
+      'Wisdom is like water, it nourishes all those who receive it and in it is a reflection of the truth.',
     'app.footer': 'Specular · 原神镜中之像 · 数据来自',
 
     'nav.home': '首页',
@@ -267,9 +268,8 @@ export const DICT: Record<Locale, Record<string, string>> = {
   en: {
     'app.title': 'Specular',
     'app.tagline':
-      'See your characters as others in the mirror — damage, substats, teams.',
-    'app.subtagline':
-      'spec·u·lar · of a mirror, reflecting · from Lacan’s specular image',
+      'Wisdom is like water, it nourishes all those who receive it and in it is a reflection of the truth.',
+    'app.subtagline': '其智如水，善利万物，为镜自省。',
     'app.footer': 'Specular · Genshin reflections · data from',
 
     'nav.home': 'Home',

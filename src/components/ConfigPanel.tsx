@@ -163,7 +163,7 @@ export default function ConfigPanel({
       />
       {/* Character section */}
       <Section title={t('config.character')}>
-        <NumberRow label={t('player.charLevel')} value={config.level} min={1} max={90} step={1} onChange={(v) => upd('level', v)} />
+        <NumberRow label={t('player.charLevel')} value={config.level} min={1} max={100} step={1} onChange={(v) => upd('level', v)} />
         <SelectRow
           label={t('player.ascensionStage')}
           value={String(config.ascensionStage)}
