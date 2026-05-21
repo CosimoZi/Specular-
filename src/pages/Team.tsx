@@ -30,6 +30,8 @@ import {
 } from '@/engine/buff-zones'
 import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
 import type { GoComputeResult, SubstatMargin, CondInfo } from '@/integration/go-calc'
+import { wiringTierForGoKey } from '@/integration/go-coverage'
+import { goCharacterKey } from '@/integration/good-adapter'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
@@ -295,6 +297,8 @@ export default function Team() {
         <p className="text-sm text-zinc-500 mt-2">{t('team.v2Hint')}</p>
       </div>
 
+      <CoverageBanner t={t} />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {team.slots.map((charId, slotIdx) => (
           <SlotCard
@@ -536,6 +540,7 @@ function SlotCard({
   }
   const idx = getCharacterIndex(charId)
   if (!idx) return null
+  const tier = wiringTierForGoKey(goCharacterKey(charId))
   return (
     <div className={`rounded-lg border bg-white dark:bg-zinc-900 overflow-hidden ${isFocus ? 'border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30' : 'border-zinc-200 dark:border-zinc-800'}`}>
       <div className="flex items-center gap-3 p-3">
@@ -543,7 +548,24 @@ function SlotCard({
           <img src={iconUrl(idx.icon)} alt={displayName(idx, locale)} className="w-full h-full object-cover" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-sm truncate">{displayName(idx, locale)}</div>
+          <div className="font-medium text-sm truncate flex items-center gap-1.5">
+            <span className="truncate">{displayName(idx, locale)}</span>
+            {tier === 'wired' ? (
+              <span
+                title={t('team.tier.wiredHint')}
+                className="text-[9px] px-1 py-0 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 font-medium flex-shrink-0"
+              >
+                {t('team.tier.wired')}
+              </span>
+            ) : (
+              <span
+                title={t('team.tier.stubHint')}
+                className="text-[9px] px-1 py-0 rounded bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 flex-shrink-0"
+              >
+                {t('team.tier.stub')}
+              </span>
+            )}
+          </div>
           <div className="text-xs" style={{ color: ELEMENT_COLOR[idx.element] }}>
             {t(`element.${idx.element}`)} · C{config?.constellation ?? 0}
           </div>
@@ -702,6 +724,24 @@ function CondInputRow({
         className="w-20 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right"
       />
     </label>
+  )
+}
+
+/** Sticky banner at the top of /team telling the user how many characters
+ *  have fully-wired GO sheets. Without this, users would silently get rough
+ *  numbers for stub characters and assume they're authoritative. */
+function CoverageBanner({ t }: { t: (k: string, f?: string) => string }) {
+  // The wired-character key list lives in src/integration/go-coverage.ts.
+  // Display copy uses the localized character names so the banner reads
+  // naturally; keep this in sync if the wired list grows.
+  const list = ['那希妲', '妮露', '坎蒂丝'].join('、')
+  return (
+    <div className="text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2 leading-snug">
+      {t('team.coverageBanner')
+        .replace('{n}', '3')
+        .replace('{total}', '~130')
+        .replace('{names}', list)}
+    </div>
   )
 }
 

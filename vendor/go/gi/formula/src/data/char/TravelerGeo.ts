@@ -49,13 +49,12 @@ export default register(
   ownBuff.char.burst.add(cmpGE(constellation, 3, 3)),
   ownBuff.char.skill.add(cmpGE(constellation, 5, 3)),
 
-  // TODO:
-  // - Add member's own formulas using `ownBuff.<buff target>.add(<buff value>)`
-  ownBuff.premod.atk.add(1),
-  // - Add teambuff formulas using `teamBuff.<buff target>.add(<buff value>)
-  teamBuff.premod.atk.add(1),
-  // - Add enemy debuff using `enemyDebuff.<debuff target>.add(<debuff value>)`
-  enemyDebuff.common.defRed_.add(1),
+  // SPECULAR-NEUTRALIZED: GO upstream's stub template injected literal
+  // ownBuff.premod.atk.add(1), teamBuff.premod.atk.add(1), and
+  // enemyDebuff.common.defRed_.add(1) — i.e. +100% self ATK, +100% team
+  // ATK, -100% enemy DEF — into every unimplemented character sheet. We
+  // strip them here so /team analysis isn't poisoned. When this character
+  // gets real buff wiring, remove this block and replace with real entries.
   //
   // <buff value> uses `own.*`, `team.*`, `target.*` (target of team buff), and `enemy.*`
 
