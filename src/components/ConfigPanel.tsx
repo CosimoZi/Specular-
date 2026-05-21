@@ -33,6 +33,13 @@ import {
 } from '@/data/character-stats'
 import { defaultConfig } from '@/data/config-types'
 
+/** Talent base level is 1..10 in-game. Constellations grant +3 to one or
+ *  two talents automatically — the engine handles that internally, so users
+ *  should only enter the BASE level here. */
+function clampTalent(v: number): number {
+  return Math.max(1, Math.min(10, Math.floor(v)))
+}
+
 const SUBSTAT_OPTIONS: ArtifactSubStat[] = [
   'critRate',
   'critDmg',
@@ -94,6 +101,22 @@ export default function ConfigPanel({
     const cap = MAX_LEVEL_BY_ASCENSION[config.ascensionStage] ?? 90
     if (config.level > cap) patch(characterId, { level: cap })
   }, [config.level, config.ascensionStage, characterId, patch])
+
+  // Clamp talent base levels to 1..10. The Pando engine adds the C3/C5 +3
+  // boost on top, so the field here is the BASE level only — and stored
+  // values from earlier versions of the form (which allowed up to 15) get
+  // pulled back into range on next mount.
+  useEffect(() => {
+    const t = config.talentLevels
+    if (t.auto <= 10 && t.skill <= 10 && t.burst <= 10) return
+    patch(characterId, {
+      talentLevels: {
+        auto: Math.min(10, t.auto),
+        skill: Math.min(10, t.skill),
+        burst: Math.min(10, t.burst),
+      },
+    })
+  }, [config.talentLevels, characterId, patch])
 
   // Weapons filtered by the character's weapon type
   const weapons = useMemo(
@@ -197,9 +220,10 @@ export default function ConfigPanel({
           onChange={(v) => upd('position', v as 'frontline' | 'backline')}
         />
         <NumberRow label={t('config.constellation')} value={config.constellation} min={0} max={6} step={1} onChange={(v) => upd('constellation', v)} />
-        <NumberRow label={t('talent.normal')} value={config.talentLevels.auto} min={1} max={15} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, auto: v })} />
-        <NumberRow label={t('talent.skill')} value={config.talentLevels.skill} min={1} max={15} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, skill: v })} />
-        <NumberRow label={t('talent.burst')} value={config.talentLevels.burst} min={1} max={15} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, burst: v })} />
+        <NumberRow label={t('talent.normal')} value={config.talentLevels.auto} min={1} max={10} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, auto: clampTalent(v) })} />
+        <NumberRow label={t('talent.skill')} value={config.talentLevels.skill} min={1} max={10} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, skill: clampTalent(v) })} />
+        <NumberRow label={t('talent.burst')} value={config.talentLevels.burst} min={1} max={10} step={1} onChange={(v) => upd('talentLevels', { ...config.talentLevels, burst: clampTalent(v) })} />
+        <p className="text-[10px] text-zinc-500 -mt-1 leading-snug">{t('talent.baseLevelHint')}</p>
       </Section>
 
       {/* Weapon section */}
