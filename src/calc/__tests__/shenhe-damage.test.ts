@@ -40,16 +40,19 @@ describe('Shenhe damage formulas — match legacy GO values', () => {
       console.log(`  ${f.name.padEnd(15)} ${Math.round(f.value).toLocaleString()}`)
     }
     expect(r.formulas.length).toBe(13)
-    // Match values from the verified old test, within ~3% (tolerates rounding
-    // in the def/res multi).
-    expect(byName.normal_0!.value).toBeCloseTo(583, -1)
-    expect(byName.normal_4!.value).toBeCloseTo(885, -1)
-    expect(byName.charged!.value).toBeCloseTo(1492, -1)
-    expect(byName.plunging_high!.value).toBeCloseTo(2153, -1)
-    expect(byName.skill_press!.value).toBeCloseTo(1914, -1)
-    expect(byName.skill_hold!.value).toBeCloseTo(2596, -1)
-    expect(byName.burst!.value).toBeCloseTo(1386, -1)
-    expect(byName.burst_dot!.value).toBeCloseTo(455, -1)
+    // Default state: on-field, CQ stacks at max (6 × 3.2% = +19.2% ATK%).
+    // Original "legacy GO baseline" (0 stacks) values, scaled by 1717.84/1517.82 ≈ 1.132:
+    //   583 → 660, 885 → 1002, 1492 → 1689, 2153 → 2437,
+    //   1914 → 2167, 2596 → 2939, 1386 → 1569, 455 → 515.
+    // Tolerance -1 = ±5.
+    expect(byName.normal_0!.value).toBeCloseTo(660, -1)
+    expect(byName.normal_4!.value).toBeCloseTo(1002, -1)
+    expect(byName.charged!.value).toBeCloseTo(1689, -1)
+    expect(byName.plunging_high!.value).toBeCloseTo(2437, -1)
+    expect(byName.skill_press!.value).toBeCloseTo(2167, -1)
+    expect(byName.skill_hold!.value).toBeCloseTo(2939, -1)
+    expect(byName.burst!.value).toBeCloseTo(1569, -1)
+    expect(byName.burst_dot!.value).toBeCloseTo(515, -1)
   })
 
   it('quillActive=on lifts cryo formulas but not physical', () => {

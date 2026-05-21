@@ -34,7 +34,7 @@ function piece(set: number, slot: ArtifactPiece['slot'], mainStat: string, subst
 }
 
 describe('Shenhe panel ATK — pure src/calc/ pipeline', () => {
-  it('L90 A6 C0 + Calamity Queller L90 A6 R1, no artifacts → 1517.42', () => {
+  it('L90 A6 C0 + Calamity Queller L90 A6 R1, no artifacts (前台 default 6 stacks)', () => {
     const r = buildCharacter(shenhe())
     console.log('Breakdown:', r.breakdown)
     console.log('Panel:', r.panel)
@@ -48,15 +48,16 @@ describe('Shenhe panel ATK — pure src/calc/ pipeline', () => {
     expect(r.panel.baseAtk).toBeCloseTo(1044.34, 1)
 
     // premod.atk_:
-    //   char ascA6 atk%   = 0.288
-    //   weapon substat    = 0.036 × 4.594 = 0.165384
-    //   TOTAL             = 0.453384
-    expect(r.panel.premodAtkPct).toBeCloseTo(0.453384, 4)
+    //   char ascA6 atk%       = 0.288
+    //   CQ R1 substat         = 0.036 × 4.594 = 0.165384
+    //   CQ R1 passive (6 × 3.2% on-field default) = 0.192
+    //   TOTAL                 = 0.645384
+    expect(r.panel.premodAtkPct).toBeCloseTo(0.645384, 4)
 
     expect(r.panel.premodAtkFlat).toBe(0)
 
-    // final.atk = 1044.336693 × (1 + 0.453384) ≈ 1517.82
-    expect(r.panel.finalAtk).toBeCloseTo(1517.82, 1)
+    // final.atk = 1044.336693 × (1 + 0.645384) ≈ 1718.33
+    expect(r.panel.finalAtk).toBeCloseTo(1718.33, 1)
   })
 
   it('+ realistic 5pc NO build with substats — every contribution adds correctly', () => {
@@ -89,17 +90,17 @@ describe('Shenhe panel ATK — pure src/calc/ pipeline', () => {
     // premod, not base — except plume which is flat ATK, also in premod).
     expect(r.panel.baseAtk).toBeCloseTo(1044.34, 1)
 
-    // premod.atk_: char(0.288) + weapon(0.165384) + sands main(0.466) + 5×atk_sub(5×0.0583=0.2915)
-    //            = 1.210884
-    expect(r.panel.premodAtkPct).toBeCloseTo(1.210884, 4)
+    // premod.atk_: char(0.288) + weapon(0.165384) + CQ-passive(0.192)
+    //              + sands main(0.466) + 5×atk_sub(5×0.0583=0.2915)
+    //            = 1.402884
+    expect(r.panel.premodAtkPct).toBeCloseTo(1.402884, 4)
 
     // premod.atk.flat: plume main(311) + 5×atkFlat sub(5×19.45=97.25) = 408.25
     expect(r.panel.premodAtkFlat).toBeCloseTo(408.25, 2)
 
-    // final.atk = 1044.336693 × (1 + 1.210884) + 408.25
-    //          = 1044.336693 × 2.210884 + 408.25
-    //          ≈ 2308.91 + 408.25 = 2717.16
-    expect(r.panel.finalAtk).toBeCloseTo(2717.16, 1)
+    // final.atk = 1044.336693 × (1 + 1.402884) + 408.25
+    //          ≈ 2509.41 + 408.25 = 2917.66
+    expect(r.panel.finalAtk).toBeCloseTo(2917.66, 1)
   })
 
   it('no weapon → only character contributions', () => {
@@ -126,9 +127,10 @@ describe('Shenhe panel ATK — pure src/calc/ pipeline', () => {
     const b = r.breakdown
     // base.atk should equal the four base sources summed.
     expect(r.panel.baseAtk).toBeCloseTo(b.charCurve + b.charAscFlat + b.weaponCurve + b.weaponAscFlat, 2)
-    // premod.atk_ should equal the six %-sources summed.
+    // premod.atk_ should equal all %-sources summed (including weapon passive).
     expect(r.panel.premodAtkPct).toBeCloseTo(
-      b.charAscPct + b.weaponSubstatPct + b.artifactMainPct + b.artifactSubPct + b.artifactSetPct, 4,
+      b.charAscPct + b.weaponSubstatPct + b.weaponPassivePct + b.artifactMainPct + b.artifactSubPct + b.artifactSetPct,
+      4,
     )
     // premod.atk.flat should equal flat sources.
     expect(r.panel.premodAtkFlat).toBeCloseTo(b.artifactMainFlat + b.artifactSubFlat, 2)

@@ -4,6 +4,7 @@
 import type { ArtifactSetSheet, CharacterSheet, WeaponSheet } from '../sheet-types'
 
 import { Shenhe } from './Shenhe'
+import { Linnea } from './Linnea'
 import { CalamityQueller } from './CalamityQueller'
 import { NoblesseOblige } from './NoblesseOblige'
 import { BlizzardStrayer } from './BlizzardStrayer'
@@ -46,6 +47,7 @@ import {
 
 export const characterSheets: Record<string, CharacterSheet> = {
   Shenhe,
+  Linnea,
 }
 
 export const weaponSheets: Record<string, WeaponSheet> = {

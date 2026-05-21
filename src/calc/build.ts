@@ -25,6 +25,7 @@ import { goCharacterKey, goWeaponKey, goArtifactSetKey } from '@/integration/goo
 import { characterSheets, weaponSheets, artifactSetSheets } from './sheets'
 import type { CondState } from './sheet-types'
 import { ShenheFormulas, applyShenheFormulaBuffs, shenheQResShred } from './sheets/Shenhe-formulas'
+import { LinneaFormulas, applyLinneaFormulaBuffs } from './sheets/Linnea-formulas'
 import { evaluateFormula, type FormulaDef, type FormulaResult, type EnemyContext } from './formula'
 import { CHARACTER_NAME_ZH, WEAPON_NAME_ZH } from './data/names-zh'
 
@@ -402,11 +403,16 @@ export function buildCharacter(
   // ---- Phase 13: damage-side cond buffs + formula evaluation ----
   // These mutate the final.dmg_.* / final.dmgMove_.* slots, so they have to
   // run AFTER phase 12 (which initialised them) and BEFORE formulas read.
-  // Per-character buff hook: today, only Shenhe.
+  // Per-character buff hook. Extend with each new wired character; once we
+  // hit 3+ refactor to a registry map.
   if (goCharKey === 'Shenhe') applyShenheFormulaBuffs(scope, condState)
+  else if (goCharKey === 'Linnea') applyLinneaFormulaBuffs(scope, condState)
 
   const formulas: FormulaResult[] = []
-  const formulaDefs: FormulaDef[] = goCharKey === 'Shenhe' ? ShenheFormulas : []
+  const formulaDefs: FormulaDef[] =
+    goCharKey === 'Shenhe' ? ShenheFormulas :
+    goCharKey === 'Linnea' ? LinneaFormulas :
+    []
   if (formulaDefs.length) {
     // Apply Q-field RES shred (cryo + phys) to enemy context, if any.
     const resShred = goCharKey === 'Shenhe' ? shenheQResShred(scope, condState) : 0
