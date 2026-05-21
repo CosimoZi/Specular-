@@ -35,11 +35,12 @@ function ayakaConfig(): CharacterConfig {
 }
 
 describe('Shenhe — hand-wired sheet', () => {
-  it('exposes 6 conditionals via the registry', () => {
+  it('exposes 5 conditionals via the registry', () => {
     const conds = listCondsForCharacter(10000063)
     const names = conds.map((c) => c.name).sort()
+    // a1Field merged into burstField (same physical trigger: Q field up).
     expect(names).toEqual(
-      ['a1Field', 'a4Hold', 'a4Press', 'burstField', 'c4Stacks', 'quillActive'],
+      ['a4Hold', 'a4Press', 'burstField', 'c4Stacks', 'quillActive'],
     )
     const c4 = conds.find((c) => c.name === 'c4Stacks')!
     expect(c4.type).toBe('num')

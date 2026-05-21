@@ -364,7 +364,6 @@ export const conditionals = {
   },
   Shenhe: {
     quillActive: { sheet: 'Shenhe', name: 'quillActive', type: 'bool' },
-    a1Field: { sheet: 'Shenhe', name: 'a1Field', type: 'bool' },
     burstField: { sheet: 'Shenhe', name: 'burstField', type: 'bool' },
     a4Press: { sheet: 'Shenhe', name: 'a4Press', type: 'bool' },
     a4Hold: { sheet: 'Shenhe', name: 'a4Hold', type: 'bool' },

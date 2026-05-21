@@ -75,6 +75,11 @@ export const SCALING_OVERRIDES: Record<string, ScalingOverride[]> = {
   '10000070': [
     { role: 'burst', scaling: 'hp' },
   ],
+
+  // 哥伦比娅 (Columbina) — 5.x「少女」型水法主 C，全套 HP-scaling
+  '10000125': [
+    { role: '*', scaling: 'hp' },
+  ],
 }
 
 /** Apply overrides in place to a list of hits for a given role.

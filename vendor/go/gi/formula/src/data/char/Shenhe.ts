@@ -101,13 +101,15 @@ const {
 // Conditionals exposed to the UI (toggled in /team conditional buffs section).
 //
 // quillActive    — Shenhe's E has applied Icy Quill to the team within window
-// a1Field        — active character is currently inside Shenhe's Q field
-// burstField     — enemies are currently inside Shenhe's Q field (RES shred)
+// burstField     — Shenhe's Q field is currently up. This single cond drives
+//                  three physically-inseparable effects:
+//                    A1: active char in field → +15% cryo DMG
+//                    C2: active char in field → +15% cryo CRIT DMG
+//                    Q  : enemies in field   → -10% cryo + physical RES
 // a4Press        — A4 buff window after a tap-E (team skill+burst dmg%)
 // a4Hold         — A4 buff window after a hold-E (team N/C/P dmg%)
 const {
   quillActive,
-  a1Field,
   burstField,
   a4Press,
   a4Hold,
@@ -128,11 +130,21 @@ const quill_baseDmg = quillActive.ifOn(
   prod(percent(subscript(skill, dm.skill.quillAtk_)), final.atk),
 )
 
-// A1 — +cryo_dmg_ to active char while in field, gated on a1Field cond.
+// A1 — +cryo_dmg_ to active char while inside Shenhe's Q field.
 const a1_cryo_dmg_ = cmpGE(
   ascension,
   1,
-  a1Field.ifOn(percent(dm.passive1.cryo_dmg_)),
+  burstField.ifOn(percent(dm.passive1.cryo_dmg_)),
+)
+
+// C2 — +cryo_critDMG_ to active char while inside Shenhe's Q field. Same
+// trigger and same magnitude (15%) as A1, just a different stat. The skill
+// param table for C2 contains only `durationInc`; the 15% magnitude is the
+// game's hardcoded value, matching dm.passive1.cryo_dmg_.
+const c2_cryo_critDMG_ = cmpGE(
+  constellation,
+  2,
+  burstField.ifOn(percent(dm.passive1.cryo_dmg_)),
 )
 
 // A4 — two parallel windows. Press: skill+burst dmg+%. Hold: N/C/P dmg+%.
@@ -173,6 +185,8 @@ export default register(
   // Team buffs ----
   // A1 — active char inside the field gets +15% cryo DMG.
   teamBuff.premod.dmg_.cryo.add(a1_cryo_dmg_),
+  // C2 — active char inside the field gets +15% cryo CRIT DMG.
+  teamBuff.premod.critDMG_.cryo.add(c2_cryo_critDMG_),
   // A4 — team-wide attack-type DMG% windows.
   teamBuff.premod.dmg_.skill.add(a4_press_dmg_),
   teamBuff.premod.dmg_.burst.add(a4_press_dmg_),

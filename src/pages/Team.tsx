@@ -32,6 +32,11 @@ import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
 import type { GoComputeResult, SubstatMargin, CondInfo } from '@/integration/go-calc'
 import { wiringTierForGoKey } from '@/integration/go-coverage'
 import { goCharacterKey } from '@/integration/good-adapter'
+import {
+  buffsForCharacter,
+  type BuffEntry,
+  type BuffSourceType,
+} from '@/integration/buff-sources'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
@@ -602,10 +607,11 @@ function NumberCell({
   )
 }
 
-/** Conditional buffs panel — one collapsible block per team member, each
- *  listing that character's GO-known conditional buffs as bool/num inputs.
- *  Renders nothing if no slot has any wired conds (which is the case for most
- *  current stub-sheet characters). */
+/** Conditional buffs panel — groups each character's buffs by source
+ *  (元素战技 / 天赋1 / 天赋2 / 命座N / 武器 / 圣遗物). Each buff shows its
+ *  effect text + a toggle/input for the underlying Pando cond. Multiple
+ *  buffs may share a cond (e.g. Shenhe A1 + C2 + Q-field RES shred all
+ *  fire when burstField=1) — toggling any of them syncs the others. */
 function CondSection({
   slots, condsBySlot, condState, configsMap, locale, t, onChange,
 }: {
@@ -633,25 +639,74 @@ function CondSection({
           if (!conds || conds.length === 0) return null
           const idx = getCharacterIndex(charId)
           if (!idx) return null
+          const goKey = goCharacterKey(charId)
+          const buffs = buffsForCharacter(goKey)
+          // Build a per-cond lookup so we know each cond's metadata.
+          const condByName = new Map(conds.map((c) => [c.name, c]))
           const slotKey = String(slotIdx)
           const charConds = condState?.[slotKey] ?? {}
+
+          // Group buffs by source (e.g. all 天赋2 entries together). If we
+          // have no descriptor for this character, fall back to raw cond
+          // input rows so the user still has some way to drive them.
+          const grouped = groupBuffsBySource(buffs)
           return (
-            <div key={slotIdx} className="px-4 py-3 space-y-2">
+            <div key={slotIdx} className="px-4 py-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <img src={iconUrl(idx.icon)} alt="" className="w-6 h-6 rounded flex-shrink-0" />
                 <span>{displayName(idx, locale)}</span>
                 <span className="text-xs text-zinc-400">· C{configsMap[String(charId)]?.constellation ?? 0}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {conds.map((c) => (
-                  <CondInputRow
-                    key={`${c.sheet}.${c.name}`}
-                    cond={c}
-                    value={charConds[c.sheet]?.[c.name] ?? 0}
-                    onChange={(v) => onChange(slotIdx, c.sheet, c.name, v)}
-                  />
-                ))}
-              </div>
+              {buffs.length === 0 ? (
+                // No descriptor — fall back to raw cond inputs
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {conds.map((c) => (
+                    <CondInputRowRaw
+                      key={`${c.sheet}.${c.name}`}
+                      cond={c}
+                      value={charConds[c.sheet]?.[c.name] ?? 0}
+                      onChange={(v) => onChange(slotIdx, c.sheet, c.name, v)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {grouped.map((group, gi) => (
+                    <div
+                      key={gi}
+                      className="border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden bg-white/40 dark:bg-zinc-900/40"
+                    >
+                      <div className={`px-3 py-1.5 text-[11px] font-semibold ${sourceHeaderClass(group.source.type)}`}>
+                        <span className="opacity-80 text-[10px] mr-1.5">{sourceTagPrefix(group.source.type, group.source.ordinal)}</span>
+                        {group.source.label[locale]}
+                      </div>
+                      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        {group.entries.map((b, bi) => {
+                          const condMeta = b.condName ? condByName.get(b.condName) : undefined
+                          const val =
+                            b.condName && goKey
+                              ? charConds[goKey]?.[b.condName] ?? 0
+                              : 0
+                          return (
+                            <BuffRowStructured
+                              key={`${gi}-${bi}`}
+                              buff={b}
+                              cond={condMeta}
+                              value={val}
+                              locale={locale}
+                              onChange={(v) => {
+                                if (b.condName && goKey) {
+                                  onChange(slotIdx, goKey, b.condName, v)
+                                }
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -663,7 +718,135 @@ function CondSection({
   )
 }
 
-function CondInputRow({
+/** Group buffs by source label so the UI can render one block per source. */
+function groupBuffsBySource(buffs: ReadonlyArray<BuffEntry>): Array<{
+  source: BuffEntry['source']
+  entries: BuffEntry[]
+}> {
+  const groups: Array<{ source: BuffEntry['source']; entries: BuffEntry[] }> = []
+  for (const b of buffs) {
+    const key = `${b.source.type}-${b.source.ordinal ?? ''}-${b.source.label.zh}`
+    const found = groups.find(
+      (g) =>
+        g.source.type === b.source.type &&
+        g.source.ordinal === b.source.ordinal &&
+        g.source.label.zh === b.source.label.zh,
+    )
+    if (found) found.entries.push(b)
+    else groups.push({ source: b.source, entries: [b] })
+    void key
+  }
+  return groups
+}
+
+function sourceTagPrefix(type: BuffSourceType, ordinal?: number): string {
+  if (type === 'constellation' && ordinal) return `C${ordinal}`
+  switch (type) {
+    case 'skill': return 'E'
+    case 'burst': return 'Q'
+    case 'normal': return 'N'
+    case 'passive1': return 'A1'
+    case 'passive2': return 'A4'
+    case 'passive3': return 'A6'
+    case 'weapon': return '武器'
+    case 'artifact': return '圣遗物'
+    default: return ''
+  }
+}
+
+function sourceHeaderClass(type: BuffSourceType): string {
+  switch (type) {
+    case 'skill':         return 'bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300'
+    case 'burst':         return 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300'
+    case 'normal':        return 'bg-zinc-50 dark:bg-zinc-900/60 text-zinc-700 dark:text-zinc-300'
+    case 'passive1':
+    case 'passive2':
+    case 'passive3':      return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
+    case 'constellation': return 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+    case 'weapon':        return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300'
+    case 'artifact':      return 'bg-pink-50 dark:bg-pink-950/40 text-pink-800 dark:text-pink-300'
+    default:              return 'bg-zinc-50 dark:bg-zinc-900/60 text-zinc-700 dark:text-zinc-300'
+  }
+}
+
+/** Structured buff row: name + effect copy, plus a toggle / number input for
+ *  the underlying cond when one is present. Always-on buffs (no cond) render
+ *  with just an "✓ 常驻" indicator. */
+function BuffRowStructured({
+  buff, cond, value, locale, onChange,
+}: {
+  buff: BuffEntry
+  cond?: CondInfo
+  value: number
+  locale: 'zh' | 'en'
+  onChange: (v: number) => void
+}) {
+  if (!cond) {
+    return (
+      <div className="px-3 py-2 flex items-start gap-3 text-sm">
+        <span className="text-emerald-600 dark:text-emerald-400 text-xs mt-0.5">✓ 常驻</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium">{buff.name[locale]}</div>
+          <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
+        </div>
+      </div>
+    )
+  }
+  if (cond.type === 'bool') {
+    return (
+      <label className="px-3 py-2 flex items-start gap-3 text-sm cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+        <input
+          type="checkbox"
+          checked={value !== 0}
+          onChange={(e) => onChange(e.target.checked ? 1 : 0)}
+          className="mt-1 cursor-pointer flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium">{buff.name[locale]}</div>
+          <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
+        </div>
+      </label>
+    )
+  }
+  if (cond.type === 'num') {
+    return (
+      <div className="px-3 py-2 flex items-start gap-3 text-sm">
+        <input
+          type="number"
+          value={value}
+          min={cond.min}
+          max={cond.max}
+          step={cond.int_only ? 1 : 0.1}
+          onChange={(e) => {
+            const n = parseFloat(e.target.value)
+            if (!Number.isNaN(n)) onChange(n)
+          }}
+          className="w-16 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right text-sm flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium">
+            {buff.name[locale]}
+            {cond.min != null && cond.max != null && (
+              <span className="ml-1 text-[10px] text-zinc-400">{cond.min}–{cond.max}</span>
+            )}
+          </div>
+          <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
+        </div>
+      </div>
+    )
+  }
+  // 'list' fallback
+  return (
+    <div className="px-3 py-2 text-sm">
+      <div className="font-medium">{buff.name[locale]}</div>
+      <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
+    </div>
+  )
+}
+
+/** Legacy raw cond input — only used as a fallback for characters that
+ *  don't have a buff descriptor yet. */
+function CondInputRowRaw({
   cond, value, onChange,
 }: {
   cond: CondInfo
