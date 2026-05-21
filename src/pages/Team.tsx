@@ -311,28 +311,7 @@ export default function Team() {
         />
       )}
 
-      {goResult && (
-        <section className="border border-indigo-300 dark:border-indigo-800 rounded-lg overflow-hidden">
-          <h3 className="text-sm font-semibold px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-800">
-            via GenshinOptimizer Pando · {goResult.goKey}
-            <span className="ml-3 text-xs font-normal text-zinc-500">
-              feed: {goResult.fed.weapon ? '✓ weapon' : '✗ no weapon'} · {goResult.fed.artifacts} artifacts
-            </span>
-          </h3>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            {Object.entries(goResult.values)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([k, v]) => (
-                <div key={k}>
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide">{k}</div>
-                  <div className="text-base tabular-nums">
-                    {typeof v === 'number' ? Math.round(v).toLocaleString() : String(v)}
-                  </div>
-                </div>
-              ))}
-          </div>
-        </section>
-      )}
+      {goResult && <GoPandoPanel result={goResult} />}
 
       {!focusCharId && (
         <p className="text-sm text-zinc-500">{t('team.pickToBegin')}</p>
@@ -730,5 +709,93 @@ function FinalStat({ label, value }: { label: string; value: string }) {
       <div className="text-[10px] text-zinc-500 uppercase tracking-wide">{label}</div>
       <div className="text-base tabular-nums font-medium">{value}</div>
     </div>
+  )
+}
+
+/** Categorize GO formula keys for friendly display. */
+const PANEL_KEYS = new Set([
+  'hp', 'atk', 'def', 'eleMas', 'enerRech_',
+  'cappedCritRate_', 'critDMG_', 'dmg_', 'heal_',
+])
+const REACTION_KEYS = new Set([
+  'overloaded', 'shattered', 'electrocharged', 'superconduct', 'swirl',
+  'burning', 'bloom', 'hyperbloom', 'burgeon',
+  'lunarcharged', 'lunarbloom', 'lunarcrystallize',
+])
+
+function formatGoValue(key: string, v: number): string {
+  if (PANEL_KEYS.has(key)) {
+    // Percent stats stored as decimals → show as %
+    if (key.endsWith('_')) return `${(v * 100).toFixed(1)}%`
+    return Math.round(v).toLocaleString()
+  }
+  // Damage / reaction numbers
+  return Math.round(v).toLocaleString()
+}
+
+const PANEL_LABELS: Record<string, string> = {
+  hp: 'HP', atk: 'ATK', def: 'DEF', eleMas: 'EM',
+  enerRech_: 'ER', cappedCritRate_: 'CR', critDMG_: 'CD',
+  dmg_: 'DMG%', heal_: 'Healing',
+}
+
+function GoPandoPanel({ result }: { result: GoComputeResult }) {
+  const entries = Object.entries(result.values).filter(([, v]) => Number.isFinite(v))
+  const panel: Array<[string, number]> = []
+  const reactions: Array<[string, number]> = []
+  const damage: Array<[string, number]> = []
+  for (const [k, v] of entries) {
+    if (PANEL_KEYS.has(k)) panel.push([k, v])
+    else if (REACTION_KEYS.has(k)) reactions.push([k, v])
+    else damage.push([k, v])
+  }
+  const PANEL_ORDER = ['hp', 'atk', 'def', 'eleMas', 'cappedCritRate_', 'critDMG_', 'enerRech_', 'dmg_', 'heal_']
+  panel.sort(([a], [b]) => PANEL_ORDER.indexOf(a) - PANEL_ORDER.indexOf(b))
+  damage.sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+  reactions.sort(([a], [b]) => a.localeCompare(b))
+
+  return (
+    <section className="border border-indigo-300 dark:border-indigo-800 rounded-lg overflow-hidden">
+      <h3 className="text-sm font-semibold px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-800 flex items-baseline">
+        <span>via GenshinOptimizer Pando · {result.goKey}</span>
+        <span className="ml-auto text-xs font-normal text-zinc-500">
+          {result.fed.weapon ? '✓ weapon' : '— no weapon'} · {result.fed.artifacts}/5 artifacts
+        </span>
+      </h3>
+      {/* Panel */}
+      <div className="px-4 py-3 grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm border-b border-indigo-100 dark:border-indigo-900/50">
+        {panel.map(([k, v]) => (
+          <FinalStat key={k} label={PANEL_LABELS[k] ?? k} value={formatGoValue(k, v)} />
+        ))}
+      </div>
+      {/* Damage per skill */}
+      {damage.length > 0 && (
+        <div className="px-4 py-3 border-b border-indigo-100 dark:border-indigo-900/50">
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Skill damage (avg)</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            {damage.map(([k, v]) => (
+              <div key={k} className="flex justify-between bg-white dark:bg-zinc-900 rounded px-2 py-1">
+                <span className="text-zinc-600 dark:text-zinc-400">{k}</span>
+                <span className="tabular-nums font-medium">{formatGoValue(k, v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Reactions */}
+      {reactions.length > 0 && (
+        <div className="px-4 py-3">
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Transformative reactions (1 trigger)</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            {reactions.map(([k, v]) => (
+              <div key={k} className="flex justify-between bg-white dark:bg-zinc-900 rounded px-2 py-1">
+                <span className="text-zinc-600 dark:text-zinc-400">{k}</span>
+                <span className="tabular-nums">{formatGoValue(k, v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
