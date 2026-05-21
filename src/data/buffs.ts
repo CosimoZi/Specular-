@@ -58,7 +58,7 @@ const MONA_Q: BuffSpec = {
     table: [0.36, 0.39, 0.42, 0.45, 0.48, 0.51, 0.54, 0.58, 0.62, 0.66, 0.70, 0.74, 0.78, 0.82, 0.86],
     appliesToParts: [0],
   },
-  defaultOn: false,
+  defaultOn: true,
 }
 
 const MONA_C1: BuffSpec = {
@@ -73,7 +73,7 @@ const MONA_C1: BuffSpec = {
     { zone: 'resShred', value: 0.4, cond: { element: 'Hydro' } },
   ],
   requires: { minConstellation: 1 },
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -93,7 +93,7 @@ const KAZUHA_A4: BuffSpec = {
     { zone: 'dmgBonusElement', value: 0.4, cond: { element: 'Cryo' } },
     { zone: 'dmgBonusElement', value: 0.4, cond: { element: 'Electro' } },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -187,7 +187,7 @@ const SHENHE_E: BuffSpec = {
   parts: [
     { zone: 'dmgBonusElement', value: 0.15, cond: { element: 'Cryo' } },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 const SHENHE_Q: BuffSpec = {
@@ -201,7 +201,7 @@ const SHENHE_Q: BuffSpec = {
   parts: [
     { zone: 'resShred', value: 0.15, cond: { element: 'Cryo' } },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -243,7 +243,7 @@ const SARA_C6: BuffSpec = {
     { zone: 'critDmg', value: 0.6, cond: { element: 'Electro' } },
   ],
   requires: { minConstellation: 6 },
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -260,7 +260,7 @@ const ROSARIA_A4: BuffSpec = {
   parts: [
     { zone: 'critRate', value: 0.1 },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -277,7 +277,7 @@ const MAVUIKA_TEAM: BuffSpec = {
   parts: [
     { zone: 'baseAtkPct', value: 0.3 },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -297,7 +297,7 @@ const VENTI_VV: BuffSpec = {
     { zone: 'resShred', value: 0.4, cond: { element: 'Cryo' } },
     { zone: 'resShred', value: 0.4, cond: { element: 'Electro' } },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -314,7 +314,7 @@ const SUCROSE_EM: BuffSpec = {
   parts: [
     { zone: 'em', value: 200 },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -332,7 +332,7 @@ const GOROU_Q: BuffSpec = {
     { zone: 'dmgBonusElement', value: 0.25, cond: { element: 'Geo' } },
     { zone: 'baseDefFlat', value: 200 },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -349,7 +349,7 @@ const XIANYUN_Q: BuffSpec = {
   parts: [
     { zone: 'dmgBonusHitType', value: 2.0, cond: { hitType: ['plunge'] } },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -366,7 +366,7 @@ const KACHINA_TEAM: BuffSpec = {
   parts: [
     { zone: 'baseDefFlat', value: 100 },
   ],
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================
@@ -384,7 +384,7 @@ const XINGQIU_C6_SELF: BuffSpec = {
     { zone: 'dmgBonusElement', value: 0.25, cond: { element: 'Hydro', selfOnly: true } },
   ],
   requires: { minConstellation: 6 },
-  defaultOn: false,
+  defaultOn: true,
 }
 
 // =============================================================================

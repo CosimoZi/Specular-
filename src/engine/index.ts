@@ -8,6 +8,15 @@ export {
   transformativeDamage,
 } from './reactions'
 export { levelMultiplier, AMP_BASE, TRANSFORMATIVE_BASE, CATALYZE_BASE, EM_CURVES } from './constants'
+export {
+  calcLunar,
+  weightLunarContributions,
+  lunarEmBonus,
+  LUNAR_BASE,
+  type LunarContext,
+  type LunarOutput,
+  type LunarReactionKind,
+} from './lunar'
 export type {
   DamageElement,
   StatKey,

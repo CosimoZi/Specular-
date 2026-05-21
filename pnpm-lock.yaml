@@ -54,6 +54,9 @@ importers:
       eslint-plugin-react-refresh:
         specifier: ^0.5.2
         version: 0.5.2(eslint@10.4.0(jiti@2.7.0))
+      genshin-db:
+        specifier: ^5.2.10
+        version: 5.2.10
       globals:
         specifier: ^17.6.0
         version: 17.6.0
@@ -756,6 +759,12 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  fuzzysort@1.9.0:
+    resolution: {integrity: sha512-MOxCT0qLTwLqmEwc7UtU045RKef7mc8Qz8eR4r2bLNEq9dy/c3ZKMEFp6IEst69otkQdFZ4FfgH2dmZD+ddX1g==}
+
+  genshin-db@5.2.10:
+    resolution: {integrity: sha512-1Lev6wYvrygpSKOENAV9cYZxwp8Q71LgrcDpP7Qp4fe50Deg1d63IkGrj+JanmYSBPreQfVnJ8iymTaFHMKphQ==}
+
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
@@ -953,6 +962,9 @@ packages:
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
+
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
 
   path-exists@4.0.0:
     resolution: {integrity: sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==}
@@ -1933,6 +1945,13 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
+  fuzzysort@1.9.0: {}
+
+  genshin-db@5.2.10:
+    dependencies:
+      fuzzysort: 1.9.0
+      pako: 2.1.0
+
   gensync@1.0.0-beta.2: {}
 
   glob-parent@6.0.2:
@@ -2079,6 +2098,8 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  pako@2.1.0: {}
 
   path-exists@4.0.0: {}
 

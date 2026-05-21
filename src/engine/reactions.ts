@@ -3,9 +3,15 @@ import {
   CATALYZE_BASE,
   EM_CURVES,
   TRANSFORMATIVE_BASE,
+  TRANSFORMATIVE_CAN_CRIT,
   levelMultiplier,
 } from './constants'
 import type { Reaction } from './types'
+
+/** Whether a given transformative reaction can crit in the current patch. */
+export function transformativeCanCrit(type: keyof typeof TRANSFORMATIVE_BASE): boolean {
+  return TRANSFORMATIVE_CAN_CRIT[type] ?? false
+}
 
 /** For amp reactions (vape/melt) — multiplier applied to the base hit damage
  *  AFTER the elemental DMG bonus, BEFORE def/res. */

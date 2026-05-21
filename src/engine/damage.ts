@@ -3,6 +3,7 @@ import {
   catalyzeAddition,
   defMultiplier,
   resMultiplier,
+  transformativeCanCrit,
   transformativeDamage,
 } from './reactions'
 import { scalingValue } from './stats'
@@ -122,18 +123,31 @@ export function calcTransformative(
       bloom: 'Dendro',
       hyperbloom: 'Dendro',
       burgeon: 'Dendro',
+      lunarcharged: 'Electro',
     }
   const elem = reactionElement[reaction.type]
   const baseRes = target.resistance[elem] ?? 0.1
   const reducedRes = target.resReduction?.[elem] ?? 0
   const rm = resMultiplier(baseRes, reducedRes)
-  // Superconduct also applies a physical RES debuff in-game, but that is
-  // modelled by the caller stacking it into target.resReduction.
   const dmg = base * rm
+
+  // Bloom-family + burning + lunar reactions CAN crit in current patch.
+  // Classical reactions (overload/swirl/EC/SC/shatter) still can't.
+  if (transformativeCanCrit(reaction.type)) {
+    const stats = attacker.stats
+    const cr = Math.min(Math.max(stats.critRate, 0), 1)
+    const cd = Math.max(stats.critDmg, 0)
+    return {
+      nonCrit: dmg,
+      crit: dmg * (1 + cd),
+      avg: dmg * (1 + cr * cd),
+      trace: { base, resMult: rm, reactionElement: elem as unknown as number, canCrit: 1 },
+    }
+  }
   return {
     nonCrit: dmg,
-    crit: dmg, // not crit'able
+    crit: dmg,
     avg: dmg,
-    trace: { base, resMult: rm, reactionElement: elem as unknown as number },
+    trace: { base, resMult: rm, reactionElement: elem as unknown as number, canCrit: 0 },
   }
 }

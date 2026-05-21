@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest'
 import {
   aggregateStats,
   calcDamage,
+  calcLunar,
   calcTransformative,
   defMultiplier,
   resMultiplier,
   ampMultiplier,
   levelMultiplier,
+  lunarEmBonus,
+  weightLunarContributions,
 } from '..'
 import type { AttackerContext, DamageInstance, TargetContext } from '..'
 
@@ -201,6 +204,59 @@ describe('calcDamage (direct hit)', () => {
   })
 })
 
+describe('lunarEmBonus', () => {
+  it('matches formula 6×EM/(EM+2000)', () => {
+    expect(lunarEmBonus(0)).toBeCloseTo(0, 6)
+    expect(lunarEmBonus(1000)).toBeCloseTo(6 * 1000 / 3000, 6) // = 2
+    expect(lunarEmBonus(2000)).toBeCloseTo(3, 6) // = 6/2 → wait, 12000/4000 = 3
+  })
+})
+
+describe('calcLunar', () => {
+  it('lunar-charged at lvl 90 produces personal+reaction with double crit zone', () => {
+    // aggregateStats adds baselines: CR +0.05, CD +0.5, ER +1.0
+    // So we set inputs that produce exact 0.5 / 1.0 after baselines:
+    const stats = aggregateStats([
+      { atkFlat: 2000, em: 1000, critRate: 0.45, critDmg: 0.5 },
+    ])
+    // post-aggregate: critRate = 0.5, critDmg = 1.0
+    const out = calcLunar(
+      {
+        reaction: 'lunar-charged',
+        attacker: stats,
+        attackerLevel: 90,
+        enemyRes: 0.1, enemyResReduction: 0,
+        lunarBonus: 0.4, // typical lunar artifact set bonus
+        reactionBonus: 0,
+      },
+      stats.atk, // personal scales on attacker ATK in this scenario
+    )
+    // personal base = 2000 × 3.0 = 6000
+    // lunarDmgMul = 1 + 0.4 + 0 + (6×1000/3000) = 1 + 0.4 + 2 = 3.4
+    // resMult = 0.9
+    // personal non-crit = 6000 × 3.4 × 0.9 = 18360
+    expect(out.personalNonCrit).toBeCloseTo(18360, 0)
+    expect(out.reactionNonCrit).toBeCloseTo(1077.4434 * 1.8 * 3.4 * 0.9, 1)
+
+    // avg factor = 1 + 0.5 × 1.0 = 1.5
+    expect(out.personalAvg).toBeCloseTo(out.personalNonCrit * 1.5, 1)
+    expect(out.reactionAvg).toBeCloseTo(out.reactionNonCrit * 1.5, 1)
+  })
+})
+
+describe('weightLunarContributions', () => {
+  it('top contributor weighted 1.0, second 0.5, others ~1/12', () => {
+    const mkOut = (avg: number) => ({
+      personalNonCrit: 0, personalCrit: 0, personalAvg: 0,
+      reactionNonCrit: 0, reactionCrit: 0, reactionAvg: 0,
+      totalAvg: avg, trace: {},
+    })
+    const sum = weightLunarContributions([mkOut(100), mkOut(50), mkOut(30), mkOut(20)])
+    // 100×1 + 50×0.5 + 30×(1/12) + 20×(1/12) = 100 + 25 + 2.5 + 1.667 = 129.17
+    expect(sum.totalAvg).toBeCloseTo(100 + 50 * 0.5 + (30 + 20) / 12, 3)
+  })
+})
+
 describe('calcTransformative', () => {
   it('overload at lvl 90 with 0 EM matches base formula', () => {
     const atk = baseAttacker({ em: 0 })
@@ -209,9 +265,21 @@ describe('calcTransformative', () => {
       kind: 'transformative',
       type: 'overload',
     })
-    const expected = 4.0 * levelMultiplier(90) * 1 * 0.9
+    // GO/BWiki authoritative: overload base coeff = 2 (NOT 4.0 as I had before)
+    const expected = 2.0 * levelMultiplier(90) * 1 * 0.9
     expect(out.nonCrit).toBeCloseTo(expected, 1)
-    expect(out.crit).toBe(out.nonCrit) // transformative cannot crit
+    expect(out.crit).toBe(out.nonCrit) // overload still cannot crit (only bloom-family + burning + lunar can)
+  })
+
+  it('bloom CAN crit (5.x rule)', () => {
+    const atk = baseAttacker({ em: 0, critRate: 0.5, critDmg: 1.0 })
+    const tgt = baseTarget()
+    const out = calcTransformative(atk, tgt, {
+      kind: 'transformative',
+      type: 'bloom',
+    })
+    expect(out.crit).toBeCloseTo(out.nonCrit * 2, 1)
+    expect(out.avg).toBeCloseTo(out.nonCrit * 1.5, 1)
   })
   it('hyperbloom resistance follows dendro element', () => {
     const atk = baseAttacker({ em: 800 })

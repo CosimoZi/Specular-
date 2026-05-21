@@ -50,6 +50,7 @@ export function aggregateStats(bags: StatBag[]): FinalStats {
     dendroDmg: 0,
     physicalDmg: 0,
     allDmg: 0,
+    lunarDmgBonus: 0,
   }
 
   for (const b of bags) {

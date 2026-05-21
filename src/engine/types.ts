@@ -36,6 +36,7 @@ export type StatKey =
   | 'dendroDmg'
   | 'physicalDmg'
   | 'allDmg' // generic "DMG bonus" applied to every hit (rare)
+  | 'lunarDmgBonus' // NEW (5.x): separate DMG-bonus stat that applies ONLY to lunar reactions
 
 export type StatBag = Partial<Record<StatKey, number>>
 
@@ -92,6 +93,7 @@ export type Reaction =
         | 'bloom'
         | 'hyperbloom'
         | 'burgeon'
+        | 'lunarcharged'
       /** Swirl propagates an element — set this when kind=transformative type=swirl. */
       swirlElement?: 'Pyro' | 'Hydro' | 'Cryo' | 'Electro'
     }

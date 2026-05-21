@@ -1,10 +1,12 @@
-// Game constants — sourced from public community references (KQM, AnimeGameData).
-// All values reflect 5.x patch numbers as of 2026-Q2.
+// Game constants. Values sourced from GenshinOptimizer's
+// `libs/gi/formula/src/data/common/reaction.ts` — the most-vetted open-source
+// reference for current-patch coefficients. Previously we'd seen conflicting
+// numbers in BWiki / KQM-cited / Honey Hunter; cross-checked against in-game
+// damage values and GO matches.
 
 /** Reaction "level multiplier" — used by transformative + catalyze reactions.
- *  Values from AvatarLevelMultiplier (game data). Linearly interpolated between
- *  the tabulated breakpoints for off-key levels (game itself uses smooth curve;
- *  linear is accurate enough for damage display). */
+ *  Table from AvatarLevelMultiplier (game data). Linear interpolation between
+ *  breakpoints is accurate enough for damage display. */
 const LEVEL_MULT_TABLE: Array<[number, number]> = [
   [1, 17.1648],
   [10, 49.0928],
@@ -32,9 +34,9 @@ export function levelMultiplier(level: number): number {
   return LEVEL_MULT_TABLE[LEVEL_MULT_TABLE.length - 1][1]
 }
 
-/** Base multipliers for amplifying reactions (vape/melt). "Strong" = the
- *  reaction triggered when the matching aura is consumed by the multiplier
- *  element (e.g. pyro melt'ing cryo aura). "Weak" is the inverse. */
+/** Base multipliers for amplifying reactions (vape/melt).
+ *  "Strong" = receiving aura matches multiplier element (e.g. pyro melt'ing cryo aura).
+ *  "Weak" = the inverse. */
 export const AMP_BASE = {
   vape_strong: 2.0, // pyro hits hydro aura
   vape_weak: 1.5, //   hydro hits pyro aura
@@ -42,32 +44,57 @@ export const AMP_BASE = {
   melt_weak: 1.5, //   cryo hits pyro aura
 } as const
 
-/** Base coefficients for transformative reactions. Final damage =
- *  base * levelMult * (1 + EM_curve + reactionBonus%) * resMult. */
+/** Base coefficients for transformative reactions, sourced verbatim from
+ *  GenshinOptimizer's `transInfo` table. */
 export const TRANSFORMATIVE_BASE = {
-  overload: 4.0,
+  overload: 2,
   swirl: 0.6,
-  electrocharged: 2.4,
-  superconduct: 1.5,
-  shatter: 3.0,
+  electrocharged: 1.2,
+  superconduct: 0.5,
+  shatter: 1.5,
   burning: 0.25,
-  bloom: 2.0,
-  hyperbloom: 3.0,
-  burgeon: 3.0,
+  bloom: 2,
+  hyperbloom: 3,
+  burgeon: 3,
+  // Lunar reactions (5.x). lunarcharged is the only one that's a normal
+  // transformative-like damage instance; lunarbloom + lunarcrystallize have
+  // their own paths handled in lunar.ts.
+  lunarcharged: 1.8,
 } as const
 
-/** Catalyze reactions (aggravate / spread) add flat damage to the base hit. */
+/** Which transformative reactions can crit. As of 5.x, bloom-family and
+ *  burning gained crit support; classic reactions (overload/swirl/EC/SC/shatter)
+ *  still cannot crit. Sourced from GO's `canCrit` flags. */
+export const TRANSFORMATIVE_CAN_CRIT: Record<keyof typeof TRANSFORMATIVE_BASE, boolean> = {
+  overload: false,
+  swirl: false,
+  electrocharged: false,
+  superconduct: false,
+  shatter: false,
+  burning: true,
+  bloom: true,
+  hyperbloom: true,
+  burgeon: true,
+  lunarcharged: true,
+}
+
+/** Catalyze reactions (aggravate / spread) add flat damage INSIDE the base
+ *  multiplier zone — i.e. `(ATK × talentMul + catalyzeAdd) × (1 + dmgBonus)`. */
 export const CATALYZE_BASE = {
   aggravate: 1.15, // added to electro hit
   spread: 1.25, //   added to dendro hit
 } as const
 
 /** EM bonus curves. Each returns the multiplicative bonus to apply.
- *  - amp: multiplies final damage by `1 + curve(EM) + reactionBonus`
+ *  - amp:         `(1 + curve(EM) + reactionBonus)` × base
  *  - transformative: same shape
- *  - catalyze: same shape, but multiplies the *additive* damage component */
+ *  - catalyze:    same shape, on the *additive* damage component
+ *  - lunar:       lunar reactions use a gentler curve */
 export const EM_CURVES = {
   amp: (em: number) => (2.78 * em) / (em + 1400),
   transformative: (em: number) => (16 * em) / (em + 2000),
   catalyze: (em: number) => (5 * em) / (em + 1200),
+  /** Lunar curve. Coefficient denominator pair sourced from GO's lunar
+   *  formula; should be verified against in-game numbers. */
+  lunar: (em: number) => (6 * em) / (em + 2000),
 } as const
