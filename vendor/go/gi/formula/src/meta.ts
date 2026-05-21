@@ -2183,7 +2183,6 @@ export const formulas = {
     skill_hold: { sheet: 'Shenhe', name: 'skill_hold', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'skill', name: 'skill_hold' } },
     burst: { sheet: 'Shenhe', name: 'burst', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'burst', name: 'burst' } },
     burst_dot: { sheet: 'Shenhe', name: 'burst_dot', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'burst', name: 'burst_dot' } },
-    icy_quill: { sheet: 'Shenhe', name: 'icy_quill', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'skill', name: 'icy_quill' } },
   },
   ShikanoinHeizou: {
     normal1: {

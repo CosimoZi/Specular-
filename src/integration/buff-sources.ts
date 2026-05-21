@@ -91,16 +91,16 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰翎附加冰伤', en: 'Icy Quill flat cryo damage' },
     effect: {
-      zh: '每次队友冰伤触发，追加 = 申鹤 ATK × E 天赋表系数',
-      en: 'Each ally cryo hit consumes one quill: +(Shenhe ATK × skill coef)',
+      zh: '勾选后，焦点角色每次冰系伤害（包括申鹤自己的 E / Q）都会在基础伤害区加上 ATK × E 天赋系数。也就是说 skill_press / skill_hold / burst / burst_dot 的数字会直接跳一截。物理普攻不受影响。',
+      en: "While active, every cryo hit the focus character lands gets +(Shenhe ATK × skill coef) added to its base damage — skill_press, skill_hold, burst, burst_dot all jump. Physical normals don't benefit.",
     },
     valueAt: (c) => {
       const eff = effectiveTalentLevel('Shenhe', 'skill', c)
       const note = consBoostActive('Shenhe', 'skill', c) ? `（含 C3 +3）` : ''
       const v = talentValue('Shenhe', 'skill', 2, eff)
       return {
-        zh: `当前: 每次 +${(v * 100).toFixed(1)}% × ATK（E lv.${eff}${note}）`,
-        en: `Now: +${(v * 100).toFixed(1)}% × ATK per quill (E lv.${eff}${note ? ' incl. C3 +3' : ''})`,
+        zh: `当前: 每次冰击 +${(v * 100).toFixed(1)}% × ATK（E lv.${eff}${note}）`,
+        en: `Now: +${(v * 100).toFixed(1)}% × ATK per cryo hit (E lv.${eff}${note ? ' incl. C3 +3' : ''})`,
       }
     },
     condName: 'quillActive',

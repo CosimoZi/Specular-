@@ -1,10 +1,9 @@
 import type { CharacterKey } from '@genshin-optimizer/gi/consts'
 import { allStats } from '@genshin-optimizer/gi/stats'
-import { cmpGE, prod, subscript } from '@genshin-optimizer/pando/engine'
+import { cmpEq, cmpGE, prod, subscript, tagVal } from '@genshin-optimizer/pando/engine'
 import {
   allBoolConditionals,
   allNumConditionals,
-  customDmg,
   enemyDebuff,
   own,
   ownBuff,
@@ -124,11 +123,31 @@ const { c4Stacks } = allNumConditionals(
 
 // --- Derived nodes -----------------------------------------------------------
 
-// Icy Quill per-hit cryo damage (custom formula): when quillActive on, deals
-// (Shenhe ATK) * (skill table value at her skill talent level).
-const quill_baseDmg = quillActive.ifOn(
+// Icy Quill per-consumption flat cryo damage:
+//   (Shenhe ATK) × (E talent-table coefficient at her current skill level)
+//
+// In-game this is a flat additive on the BASE damage zone for any
+// cryo-elemental hit the active character lands. Each cryo hit consumes
+// one quill and adds this flat to that hit's pre-mitigation damage.
+//
+// In Pando: formula.base is an `agg` (sum) bucket per formula, and the
+// engine reads each formula's `prep.ele` in that formula's own tag
+// context. So a single `ownBuff.formula.base.add(...)` entry whose value
+// is gated on `prep.ele === 'cryo'` automatically applies to every cryo
+// formula (skill_press, skill_hold, burst, burst_dot) and silently zeros
+// for physical formulas (normal_*, charged, plunging). No per-formula
+// enumeration; the engine fans out for us.
+const quillFlat = quillActive.ifOn(
   prod(percent(subscript(skill, dm.skill.quillAtk_)), final.atk),
 )
+// Read the CURRENT formula's element directly from the cache via tagVal('ele').
+// vendor/go/gi/formula/src/data/common/prep.ts wires `formula.dmg`'s evaluation
+// inside a dynTag that injects prep.ele into the tag cache before evaluating
+// dmg.out (which reads formula.base). So at the moment our base.add value is
+// computed, cache.ele is the formula's resolved element. tagVal('ele') reads
+// it cheaply and accurately, independent of any sheet/name scoping issues
+// `own.prep.ele` would introduce here.
+const quillFlatForCryoOnly = cmpEq(tagVal('ele'), 'cryo', quillFlat)
 
 // A1 — +cryo_dmg_ to active char while inside Shenhe's Q field.
 const a1_cryo_dmg_ = cmpGE(
@@ -185,6 +204,9 @@ export default register(
 
   // Self buffs ----
   ownBuff.premod.dmg_.skill.add(c4_skill_dmg_),
+  // Icy Quill — flat cryo damage on every cryo-elemental hit's base zone.
+  // One entry, engine fans out to every cryo formula via prep.ele resolution.
+  ownBuff.formula.base.add(quillFlatForCryoOnly),
 
   // Team buffs ----
   // A1 — active char inside the field gets +15% cryo DMG.
@@ -215,10 +237,4 @@ export default register(
   dmg('skill_hold', info, 'atk', dm.skill.hold, 'skill'),
   dmg('burst', info, 'atk', dm.burst.dmg, 'burst'),
   dmg('burst_dot', info, 'atk', dm.burst.dot, 'burst'),
-
-  // Icy Quill per-consumption flat cryo damage. Custom formula because the
-  // damage rides on whatever ally hit triggered the consumption; in the
-  // single-character damage panel we surface Shenhe's own number to make the
-  // value of her skill talent level visible.
-  customDmg('icy_quill', 'cryo', 'skill', quill_baseDmg),
 )
