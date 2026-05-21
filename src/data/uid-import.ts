@@ -238,7 +238,7 @@ function parseAvatar(raw: Record<string, unknown>): ImportedCharacter | null {
     elementBonus: 0, // filled in by CharacterDetail based on element
   }
 
-  return { config, snapshot, rawSkillCount: skillIds.length }
+  return { config, snapshot, rawSkillCount: skillIdsAsc.length }
 }
 
 // =============================================================================
