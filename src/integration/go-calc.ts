@@ -345,18 +345,22 @@ export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
 // Substat marginal value via GO Pando
 // =============================================================================
 
-/** One max-roll value for each substat (5* artifact, max tier). Decimals. */
+/** One median-tier roll value for each substat (5★ artifact). Genshin
+ *  substats roll across 4 uniform tiers (T1..T4); we use the average
+ *  (T1+T4)/2 here as the "typical" roll — that's what most community
+ *  calculators show for "+1 roll" marginal-value analysis, since assuming
+ *  every roll lands at max overstates the gain. */
 const SUBSTAT_ROLL: Record<string, number> = {
-  critRate_: 0.0389,
-  critDMG_: 0.0777,
-  atk_: 0.0583,
-  hp_: 0.0583,
-  def_: 0.0729,
-  eleMas: 23.31,
-  enerRech_: 0.0648,
-  atk: 19.45,
-  hp: 298.75,
-  def: 23.15,
+  critRate_: 0.033055,   // (2.72 + 3.89) / 2
+  critDMG_: 0.06605,     // (5.44 + 7.77) / 2
+  atk_: 0.04955,         // (4.08 + 5.83) / 2
+  hp_: 0.04955,
+  def_: 0.061945,        // (5.10 + 7.29) / 2
+  eleMas: 19.815,        // (16.32 + 23.31) / 2
+  enerRech_: 0.05505,    // (4.53 + 6.48) / 2
+  atk: 16.535,           // (13.62 + 19.45) / 2
+  hp: 253.94,            // (209.13 + 298.75) / 2
+  def: 19.675,           // (16.20 + 23.15) / 2
 }
 
 export interface SubstatMargin {
