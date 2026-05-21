@@ -107,12 +107,11 @@ export interface GoodCharacter {
 export function configToGoCharacter(config: CharacterConfig): GoodCharacter | null {
   const key = goCharacterKey(config.characterId)
   if (!key) return null
-  // GO's schema clamps level to 1..90. Some Enka responses report 95/100 for
-  // certain newer characters (training mode? trial?), but GO won't accept
-  // those — feed the in-game max.
-  const clampedLevel = Math.min(Math.max(config.level, 1), 90)
-  // Talent levels in-game can be 1..15 (with C3+C5 bumps for some chars).
-  // GO uses 0-indexed and accepts up to 14 (= displayed 15).
+  // Genshin's 5.7+ "Crowning of Insight" raised the character level cap to
+  // 100 (with new ascension stages 7-10 in some patches). GO supports
+  // level 1..100 (`charMaxLevel = 100` in gi/consts/character.ts).
+  const clampedLevel = Math.min(Math.max(config.level, 1), 100)
+  // Talent levels can be 1..15 (with C3+C5 bumps). GO uses 0-indexed.
   const clampTalent = (n: number) => Math.max(0, Math.min(14, n - 1))
   return {
     key,
