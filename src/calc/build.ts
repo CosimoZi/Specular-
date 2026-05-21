@@ -583,8 +583,9 @@ function assembleContributions(
   ): ContribRow[] => {
     const rows: ContribRow[] = []
     if (baseFromChar) {
-      // CR / CD have a fixed base (5% / 50%) baked into the formula.
-      rows.push({ source: `角色基础 ${label}`, value: key === 'cappedCritRate_' ? 0.05 : 0.5, kind: 'pure' })
+      // CR has a 5% base baked into the formula. (CD has 50% but we don't
+      // show it — that constant is just noise in the breakdown.)
+      rows.push({ source: `角色基础 ${label}`, value: key === 'critRate_' ? 0.05 : 0, kind: 'pure' })
     }
     if (nz(scope.get(`char.asc.${key}`))) rows.push({ source: `${charName} 突破 ${label}`, value: scope.get(`char.asc.${key}`)!, kind: 'pure' })
     if (nz(scope.get(`weap.substat.${key}`))) rows.push({ source: `${weaponName} 副词条 ${label}`, value: scope.get(`weap.substat.${key}`)!, kind: 'pure' })
