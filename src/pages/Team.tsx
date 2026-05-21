@@ -29,7 +29,7 @@ import {
   type Position,
 } from '@/engine/buff-zones'
 import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
-import type { GoComputeResult, SubstatMargin } from '@/integration/go-calc'
+import type { GoComputeResult, SubstatMargin, CondInfo } from '@/integration/go-calc'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
@@ -119,6 +119,7 @@ export default function Team() {
   const setFocus = useTeamConfig((s) => s.setFocus)
   const teamPatch = useTeamConfig((s) => s.patch)
   const toggleBuff = useTeamConfig((s) => s.toggleBuff)
+  const setCond = useTeamConfig((s) => s.setCond)
   // Flatten characters → active-build-only map (for buff filtering / picker).
   const characters = useCharacterConfigs((s) => s.characters)
   const configsMap = useMemo(() => {
@@ -151,28 +152,69 @@ export default function Team() {
   const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
   const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
 
-  // GO Pando — compute via vendored GenshinOptimizer engine. Dynamic import
-  // so the ~230 KB gzip GO chunk only loads when user visits /team.
+  // Per-slot cond list (which conditional buffs a slot's character exposes).
+  // Loaded lazily via the same go-calc dynamic-imported module so we don't
+  // eagerly pull the GO chunk into the main /team bundle.
+  const [condsBySlot, setCondsBySlot] = useState<Array<CondInfo[]>>([[], [], [], []])
+  useEffect(() => {
+    let cancelled = false
+    import('@/integration/go-calc').then(({ listCondsForCharacter }) => {
+      if (cancelled) return
+      setCondsBySlot(team.slots.map((id) => (id == null ? [] : listCondsForCharacter(id))))
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team.slots.join(',')])
+
+  // GO Pando — compute via vendored GenshinOptimizer engine, full 4-member
+  // team context so team buffs (4pc artifacts, weapon passives, character
+  // teamBuff entries) propagate to the focus member. Dynamic import so the
+  // ~230 KB gzip GO chunk only loads when user visits /team.
   const [goResult, setGoResult] = useState<GoComputeResult | null>(null)
   const [goMargins, setGoMargins] = useState<{
     baselineFormula: string
     baselineValue: number
     margins: SubstatMargin[]
   } | null>(null)
+  // Stable string key for the full team's config (so a child's build edit
+  // re-runs GO compute, not just slot changes).
+  const teamConfigsKey = useMemo(() => {
+    return team.slots
+      .map((id) => {
+        if (id == null) return 'x'
+        const c = configsMap[String(id)]
+        return c ? `${id}:${c.lastModified}` : `${id}:0`
+      })
+      .join('|')
+  }, [team.slots, configsMap])
+  const condStateKey = useMemo(() => JSON.stringify(team.condState ?? {}), [team.condState])
   useEffect(() => {
-    if (!focusConfig) {
+    if (!focusConfig || focusIdx < 0) {
       setGoResult(null)
       setGoMargins(null)
       return
     }
     let cancelled = false
-    import('@/integration/go-calc').then(({ computeViaGo, computeSubstatMarginsViaGo }) => {
+    import('@/integration/go-calc').then(({ computeTeamViaGo, computeSubstatMarginsViaGo }) => {
       if (cancelled) return
-      setGoResult(computeViaGo(focusConfig))
-      setGoMargins(computeSubstatMarginsViaGo(focusConfig))
+      const members = team.slots.map((id) => {
+        if (id == null) return null
+        const cfg = configsMap[String(id)]
+        return cfg ? { config: cfg } : null
+      })
+      const opts = {
+        enemyLevel: team.enemyLevel,
+        enemyPreRes: team.enemyBaseRes / 100,
+        condState: team.condState,
+      }
+      setGoResult(computeTeamViaGo(members, focusIdx, opts))
+      setGoMargins(computeSubstatMarginsViaGo(members, focusIdx, opts))
     })
     return () => { cancelled = true }
-  }, [focusConfig])
+    // teamConfigsKey + condStateKey + enemy* together cover every input to the
+    // GO call — using them as the dep list keeps this stable across re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusIdx, teamConfigsKey, condStateKey, team.enemyLevel, team.enemyBaseRes])
 
   const eligibleBuffs = useMemo(() => {
     const teamIds = team.slots.filter((s): s is number | string => s !== null)
@@ -316,6 +358,19 @@ export default function Team() {
           {t('team.buffsCoverage')} ({new Set(BUFFS.map((b) => b.sourceCharacterId)).size} {t('team.charactersCoveredSuffix')})
         </p>
       </section>
+
+      {/* Conditional buffs (via GO Pando) — character-specific toggles like
+          Bennett's Q field, Nahida's burst-active flag, etc. Only renders
+          for team members whose vendored GO sheet actually wires conds. */}
+      <CondSection
+        slots={team.slots}
+        condsBySlot={condsBySlot}
+        condState={team.condState}
+        configsMap={configsMap}
+        locale={locale}
+        t={t}
+        onChange={(slotIdx, sheet, condName, value) => setCond(slotIdx, sheet, condName, value)}
+      />
 
       {focusMeta && focusIdx_data && focusState.finalStats && (
         <FocusDamagePanel
@@ -515,6 +570,131 @@ function NumberCell({
           if (!Number.isNaN(n)) onChange(n)
         }}
         className="w-full px-2 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
+      />
+    </label>
+  )
+}
+
+/** Conditional buffs panel — one collapsible block per team member, each
+ *  listing that character's GO-known conditional buffs as bool/num inputs.
+ *  Renders nothing if no slot has any wired conds (which is the case for most
+ *  current stub-sheet characters). */
+function CondSection({
+  slots, condsBySlot, condState, configsMap, locale, t, onChange,
+}: {
+  slots: Array<number | string | null>
+  condsBySlot: Array<CondInfo[]>
+  condState: TeamConfig['condState']
+  configsMap: Record<string, CharacterConfig>
+  locale: 'zh' | 'en'
+  t: (k: string, f?: string) => string
+  onChange: (slotIdx: number, sheet: string, condName: string, value: number) => void
+}) {
+  // Only render the section if at least one slot has any wired conds.
+  const hasAny = condsBySlot.some((cs) => cs.length > 0)
+  if (!hasAny) return null
+  return (
+    <section className="border border-violet-200 dark:border-violet-900 rounded-lg overflow-hidden">
+      <h3 className="text-sm font-semibold px-4 py-2 bg-violet-50 dark:bg-violet-950/30 border-b border-violet-200 dark:border-violet-800">
+        {t('team.condTitle')}
+        <span className="ml-2 text-xs font-normal text-zinc-500">{t('team.condSubtitle')}</span>
+      </h3>
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {slots.map((charId, slotIdx) => {
+          if (charId == null) return null
+          const conds = condsBySlot[slotIdx]
+          if (!conds || conds.length === 0) return null
+          const idx = getCharacterIndex(charId)
+          if (!idx) return null
+          const slotKey = String(slotIdx)
+          const charConds = condState?.[slotKey] ?? {}
+          return (
+            <div key={slotIdx} className="px-4 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <img src={iconUrl(idx.icon)} alt="" className="w-6 h-6 rounded flex-shrink-0" />
+                <span>{displayName(idx, locale)}</span>
+                <span className="text-xs text-zinc-400">· C{configsMap[String(charId)]?.constellation ?? 0}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {conds.map((c) => (
+                  <CondInputRow
+                    key={`${c.sheet}.${c.name}`}
+                    cond={c}
+                    value={charConds[c.sheet]?.[c.name] ?? 0}
+                    onChange={(v) => onChange(slotIdx, c.sheet, c.name, v)}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-xs text-zinc-500 px-4 py-2 bg-violet-50/40 dark:bg-violet-950/20 border-t border-violet-100 dark:border-violet-900/50">
+        {t('team.condHint')}
+      </p>
+    </section>
+  )
+}
+
+function CondInputRow({
+  cond, value, onChange,
+}: {
+  cond: CondInfo
+  value: number
+  onChange: (v: number) => void
+}) {
+  // Friendly label: split camelCase / underscore_case → spaced words.
+  const friendly = cond.name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase())
+  if (cond.type === 'bool') {
+    return (
+      <label className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-zinc-50 dark:hover:bg-zinc-900/50 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={value !== 0}
+          onChange={(e) => onChange(e.target.checked ? 1 : 0)}
+          className="cursor-pointer"
+        />
+        <span className="flex-1">{friendly}</span>
+      </label>
+    )
+  }
+  if (cond.type === 'num') {
+    return (
+      <label className="flex items-center gap-2 text-sm px-2 py-1">
+        <span className="flex-1">{friendly}</span>
+        <input
+          type="number"
+          value={value}
+          min={cond.min}
+          max={cond.max}
+          step={cond.int_only ? 1 : 0.1}
+          onChange={(e) => {
+            const n = parseFloat(e.target.value)
+            if (!Number.isNaN(n)) onChange(n)
+          }}
+          className="w-20 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right"
+        />
+        {(cond.min != null && cond.max != null) && (
+          <span className="text-[10px] text-zinc-400 w-12 text-right">{cond.min}-{cond.max}</span>
+        )}
+      </label>
+    )
+  }
+  // 'list' — render fallback numeric input until we have option labels.
+  return (
+    <label className="flex items-center gap-2 text-sm px-2 py-1">
+      <span className="flex-1">{friendly} <span className="text-[10px] text-zinc-400">(list)</span></span>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => {
+          const n = parseInt(e.target.value, 10)
+          if (!Number.isNaN(n)) onChange(n)
+        }}
+        className="w-20 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right"
       />
     </label>
   )

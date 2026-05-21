@@ -1,12 +1,20 @@
-// Bridge from our CharacterConfig to GenshinOptimizer's Pando calculator.
-// Feeds full equipment (character + weapon + 5 artifacts) so damage numbers
-// are real, not just panel-baseline.
+// Bridge from our CharacterConfig (per slot) to GenshinOptimizer's Pando calc.
+//
+// As of phase 8 (multi-build + cond bridging), this module computes the FULL
+// 4-member team into a single `genshinCalculatorWithEntries(...)` invocation
+// — so team buffs (4pc artifact set bonuses, weapon team buffs, character
+// teamBuff.<path> entries) propagate to the focus member automatically via
+// `teamData`. Per-character conditional buffs (Bennett's Q field, Nahida's
+// burst-active flag, Furina fanfare stacks, etc.) are pushed in via
+// `conditionalData(dst, …)` from a Record-shaped store in TeamConfig.
 
 import type { ICharacter, IWeapon } from '@genshin-optimizer/gi/good'
 import {
   charData,
   teamData,
   withMember,
+  conditionalData,
+  conditionals as condRegistry,
   ownBuff,
   enemyDebuff,
   own,
@@ -82,44 +90,162 @@ export function getGoKey(characterId: number | string): string | null {
 
 export interface GoComputeResult {
   goKey: string
-  /** Whether weapon/artifact data was fed (vs panel-only). */
+  /** Whether weapon/artifact data was fed for the focus member. */
   fed: { weapon: boolean; artifacts: number }
-  /** Map of formula tag name → computed value. */
+  /** Map of formula tag name → computed value, from the focus member's view. */
   values: Record<string, number>
+  /** GO keys of every team slot that successfully fed (in slot order). */
+  teamKeys: Array<string | null>
 }
 
-/** Compute via GO Pando with the character's full equipment.
- *  Returns null if character isn't in GO sheets. */
-export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
-  const goChar = configToGoCharacter(config)
-  if (!goChar) return null
+// =============================================================================
+// Cond registry exposure — for UI to enumerate per-character conditional buffs
+// =============================================================================
 
-  const goWep = weaponConfigToGoWeapon(config.weapon, goChar.key)
+export type CondType = 'bool' | 'num' | 'list'
+export interface CondInfo {
+  sheet: string
+  name: string
+  type: CondType
+  int_only?: boolean
+  min?: number
+  max?: number
+}
 
-  const artFeed: Array<{ set: string; stats: Array<{ key: string; value: number }> }> = []
-  for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
-    const piece = config.artifacts[slot]
-    if (!piece) continue
-    const f = pieceToFeed(piece)
-    if (f) artFeed.push(f)
+/** GO's auto-generated stub markers — sheets that haven't had real cond wiring
+ *  done. Hide these from the UI; they don't actually buff anything. */
+const STUB_COND_NAMES = new Set(['someBoolConditional'])
+
+/** List every conditional buff a given GO sheet (character/weapon/artifact)
+ *  exposes. Filters out stub-only entries that don't actually wire to a buff. */
+export function listCondsForSheet(sheetKey: string): CondInfo[] {
+  const reg = (condRegistry as Record<string, Record<string, CondInfo>>)[sheetKey]
+  if (!reg) return []
+  return Object.values(reg).filter((c) => !STUB_COND_NAMES.has(c.name))
+}
+
+/** Convenience: list conds for a character by their internal id. */
+export function listCondsForCharacter(characterId: number | string): CondInfo[] {
+  const key = goCharacterKey(characterId)
+  if (!key) return []
+  return listCondsForSheet(key)
+}
+
+// =============================================================================
+// Team-shaped compute. condState shape:
+//   { [slotIdx 0..3 as string]: { [sheet]: { [condName]: number } } }
+// =============================================================================
+
+export interface TeamMemberInput {
+  config: CharacterConfig
+}
+
+export interface TeamComputeOptions {
+  enemyLevel?: number
+  /** Pre-mitigation resistance, 0..1. Default 0.1 (10% base res). */
+  enemyPreRes?: number
+  /** Cond state, nested as slotIdx → sheet → condName → value. */
+  condState?: Record<string, Record<string, Record<string, number>>>
+}
+
+const SLOT_KEYS = ['0', '1', '2', '3'] as const
+
+/** Build the full team's TagMapNodeEntries: per-member equipment, team-wide
+ *  cond plumbing, and enemy debuffs. Returns null if the focus slot doesn't
+ *  resolve to a GO-known character.
+ *
+ *  members: index → input; null means empty slot.
+ *  focusSlotIdx: which slot's `src` view we compute against (0..3).
+ */
+export function computeTeamViaGo(
+  members: Array<TeamMemberInput | null>,
+  focusSlotIdx: number,
+  opts: TeamComputeOptions = {},
+): GoComputeResult | null {
+  const focusSlotKey = SLOT_KEYS[focusSlotIdx]
+  if (!focusSlotKey) return null
+
+  const presentSlots: string[] = []
+  const memberEntries: TagMapNodeEntries = []
+  const teamKeys: Array<string | null> = [null, null, null, null]
+  let focusGoKey: string | null = null
+  let focusFedWeapon = false
+  let focusFedArtifacts = 0
+
+  for (let i = 0; i < 4; i++) {
+    const m = members[i]
+    if (!m) continue
+    const goChar = configToGoCharacter(m.config)
+    if (!goChar) continue
+    const slotKey = SLOT_KEYS[i]
+    presentSlots.push(slotKey)
+    teamKeys[i] = goChar.key
+
+    const goWep = weaponConfigToGoWeapon(m.config.weapon, goChar.key)
+    const artFeed: Array<{ set: string; stats: Array<{ key: string; value: number }> }> = []
+    for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
+      const piece = m.config.artifacts[slot]
+      if (!piece) continue
+      const f = pieceToFeed(piece)
+      if (f) artFeed.push(f)
+    }
+
+    const ent: TagMapNodeEntries = [
+      ...charData(goChar as unknown as ICharacter),
+    ]
+    if (goWep) ent.push(...weaponData(goWep as unknown as IWeapon))
+    if (artFeed.length > 0) {
+      ent.push(
+        ...artifactsData(artFeed as unknown as Parameters<typeof artifactsData>[0]),
+      )
+    }
+    memberEntries.push(...withMember(slotKey, ...ent))
+
+    if (i === focusSlotIdx) {
+      focusGoKey = goChar.key
+      focusFedWeapon = !!goWep
+      focusFedArtifacts = artFeed.length
+    }
   }
-  void artifactPieceToGoArtifact // kept for GOOD export path
 
-  const memberEntries: TagMapNodeEntries = [
-    ...charData(goChar as unknown as ICharacter),
-  ]
-  if (goWep) memberEntries.push(...weaponData(goWep as unknown as IWeapon))
-  if (artFeed.length > 0) {
-    memberEntries.push(
-      ...artifactsData(artFeed as unknown as Parameters<typeof artifactsData>[0]),
-    )
+  if (!focusGoKey || !presentSlots.includes(focusSlotKey)) return null
+
+  // Conditional plumbing — for every dst that's present, push the entire
+  // cross-product of (src, sheet, condName, value). Redundant but safe; mirrors
+  // the pattern in vendor/go/gi/formula/src/example.test.ts.
+  const condEntries: TagMapNodeEntries = []
+  if (opts.condState && Object.keys(opts.condState).length > 0) {
+    // Filter condState to only present slots, and prune zero-valued conds so
+    // the calc isn't bombarded with no-op entries.
+    const filtered: Record<string, Record<string, Record<string, number>>> = {}
+    for (const [srcSlot, sheets] of Object.entries(opts.condState)) {
+      if (!presentSlots.includes(srcSlot)) continue
+      const sheetsOut: Record<string, Record<string, number>> = {}
+      for (const [sheet, names] of Object.entries(sheets)) {
+        const namesOut: Record<string, number> = {}
+        for (const [n, v] of Object.entries(names)) {
+          if (typeof v === 'number' && v !== 0) namesOut[n] = v
+        }
+        if (Object.keys(namesOut).length > 0) sheetsOut[sheet] = namesOut
+      }
+      if (Object.keys(sheetsOut).length > 0) filtered[srcSlot] = sheetsOut
+    }
+    for (const dst of presentSlots) {
+      condEntries.push(
+        ...conditionalData(
+          dst as Parameters<typeof conditionalData>[0],
+          filtered as Parameters<typeof conditionalData>[1],
+        ),
+      )
+    }
   }
 
   const data: TagMapNodeEntries = [
-    ...teamData(['0']),
-    ...withMember('0', ...memberEntries),
-    enemyDebuff.common.lvl.add(100),
-    enemyDebuff.common.preRes.add(0.1),
+    ...teamData(presentSlots as unknown as Parameters<typeof teamData>[0]),
+    ...memberEntries,
+    ...condEntries,
+    enemyDebuff.common.lvl.add(opts.enemyLevel ?? 100),
+    enemyDebuff.common.preRes.add(opts.enemyPreRes ?? 0.1),
     ownBuff.common.critMode.add('avg'),
   ]
 
@@ -127,11 +253,10 @@ export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
   try {
     calc = genshinCalculatorWithEntries(data)
   } catch (e) {
-    console.warn(`[Specular] GO calc init failed for ${goChar.key}:`, (e as Error).message)
+    console.warn(`[Specular] GO team calc init failed for ${focusGoKey}:`, (e as Error).message)
     return null
   }
-  const mem = calc.withTag({ src: '0' })
-
+  const mem = calc.withTag({ src: focusSlotKey })
   const formulas = mem.listFormulas(own.listing.formulas)
   const values: Record<string, number> = {}
   for (const f of formulas) {
@@ -145,10 +270,18 @@ export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
     }
   }
   return {
-    goKey: goChar.key,
-    fed: { weapon: !!goWep, artifacts: artFeed.length },
+    goKey: focusGoKey,
+    fed: { weapon: focusFedWeapon, artifacts: focusFedArtifacts },
     values,
+    teamKeys,
   }
+}
+
+/** Single-character compute — kept for backwards compat with the substat
+ *  marginal-value flow. Internally delegates to computeTeamViaGo with a
+ *  one-member array. */
+export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
+  return computeTeamViaGo([{ config }, null, null, null], 0)
 }
 
 // =============================================================================
@@ -199,22 +332,55 @@ function pickMainFormula(values: Record<string, number>): { name: string; value:
   return best
 }
 
-/** Compute the GO baseline + perturb one substat at a time to measure margin.
- *  Returns null if the character isn't in GO sheets. */
-export function computeSubstatMarginsViaGo(config: CharacterConfig): {
+interface SubstatMarginResult {
   baselineFormula: string
   baselineValue: number
   margins: SubstatMargin[]
-} | null {
+}
+
+/** Compute the GO baseline + perturb one substat at a time to measure margin.
+ *  Returns null if the focus character isn't in GO sheets.
+ *
+ *  Two call shapes:
+ *    1. Single character (backward-compat): pass a CharacterConfig directly.
+ *    2. Full team context: pass (members, focusSlotIdx, opts) so the marginal
+ *       value reflects team buffs (e.g. Bennett's ATK% boost makes flat ATK
+ *       rolls worth less, %ATK rolls worth more). */
+export function computeSubstatMarginsViaGo(
+  config: CharacterConfig,
+): SubstatMarginResult | null
+export function computeSubstatMarginsViaGo(
+  members: Array<TeamMemberInput | null>,
+  focusSlotIdx: number,
+  opts?: TeamComputeOptions,
+): SubstatMarginResult | null
+export function computeSubstatMarginsViaGo(
+  configOrMembers: CharacterConfig | Array<TeamMemberInput | null>,
+  focusSlotIdx?: number,
+  opts?: TeamComputeOptions,
+): SubstatMarginResult | null {
+  // Normalise to the team shape.
+  let members: Array<TeamMemberInput | null>
+  let focus: number
+  let teamOpts: TeamComputeOptions
+  if (Array.isArray(configOrMembers)) {
+    members = configOrMembers
+    focus = focusSlotIdx ?? 0
+    teamOpts = opts ?? {}
+  } else {
+    members = [{ config: configOrMembers }, null, null, null]
+    focus = 0
+    teamOpts = {}
+  }
   // Get baseline
-  const baseline = computeViaGo(config)
+  const baseline = computeTeamViaGo(members, focus, teamOpts)
   if (!baseline) return null
   const main = pickMainFormula(baseline.values)
   if (!main) return null
 
   const margins: SubstatMargin[] = []
   for (const [substat, roll] of Object.entries(SUBSTAT_ROLL)) {
-    const perturbed = computeViaGoWithExtraStat(config, substat, roll)
+    const perturbed = computeTeamViaGoWithExtraStat(members, focus, substat, roll, teamOpts)
     if (!perturbed) continue
     const newVal = perturbed.values[main.name]
     if (newVal === undefined) continue
@@ -233,44 +399,103 @@ export function computeSubstatMarginsViaGo(config: CharacterConfig): {
   }
 }
 
-/** Re-run GO compute with one extra stat boost via userBuff.premod.<key>.add(v). */
-function computeViaGoWithExtraStat(
-  config: CharacterConfig,
+/** Re-run team compute with one extra stat boost on the focus member via
+ *  userBuff.premod.<key>.add(v) inside that member's withMember block. */
+function computeTeamViaGoWithExtraStat(
+  members: Array<TeamMemberInput | null>,
+  focusSlotIdx: number,
   substat: string,
   rollValue: number,
+  opts: TeamComputeOptions,
 ): GoComputeResult | null {
-  const goChar = configToGoCharacter(config)
-  if (!goChar) return null
-  const goWep = weaponConfigToGoWeapon(config.weapon, goChar.key)
+  const focusSlotKey = SLOT_KEYS[focusSlotIdx]
+  if (!focusSlotKey) return null
+  const focusInput = members[focusSlotIdx]
+  if (!focusInput) return null
 
-  const artFeed: Array<{ set: string; stats: Array<{ key: string; value: number }> }> = []
-  for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
-    const piece = config.artifacts[slot]
-    if (!piece) continue
-    const f = pieceToFeed(piece)
-    if (f) artFeed.push(f)
-  }
+  const presentSlots: string[] = []
+  const memberEntries: TagMapNodeEntries = []
+  const teamKeys: Array<string | null> = [null, null, null, null]
+  let focusGoKey: string | null = null
+  let focusFedWeapon = false
+  let focusFedArtifacts = 0
 
-  const memberEntries: TagMapNodeEntries = [
-    ...charData(goChar as unknown as ICharacter),
-  ]
-  if (goWep) memberEntries.push(...weaponData(goWep as unknown as IWeapon))
-  if (artFeed.length > 0) {
-    memberEntries.push(
-      ...artifactsData(artFeed as unknown as Parameters<typeof artifactsData>[0]),
-    )
+  for (let i = 0; i < 4; i++) {
+    const m = members[i]
+    if (!m) continue
+    const goChar = configToGoCharacter(m.config)
+    if (!goChar) continue
+    const slotKey = SLOT_KEYS[i]
+    presentSlots.push(slotKey)
+    teamKeys[i] = goChar.key
+
+    const goWep = weaponConfigToGoWeapon(m.config.weapon, goChar.key)
+    const artFeed: Array<{ set: string; stats: Array<{ key: string; value: number }> }> = []
+    for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
+      const piece = m.config.artifacts[slot]
+      if (!piece) continue
+      const f = pieceToFeed(piece)
+      if (f) artFeed.push(f)
+    }
+
+    const ent: TagMapNodeEntries = [
+      ...charData(goChar as unknown as ICharacter),
+    ]
+    if (goWep) ent.push(...weaponData(goWep as unknown as IWeapon))
+    if (artFeed.length > 0) {
+      ent.push(
+        ...artifactsData(artFeed as unknown as Parameters<typeof artifactsData>[0]),
+      )
+    }
+
+    // Inject the extra substat ONLY on the focus member's entries.
+    if (i === focusSlotIdx) {
+      const userBuffEntry = (userBuff as unknown as { premod: Record<string, { add: (v: number) => unknown }> })
+        .premod[substat]
+        ?.add(rollValue) as unknown as TagMapNodeEntries[number]
+      if (userBuffEntry) ent.push(userBuffEntry)
+    }
+    memberEntries.push(...withMember(slotKey, ...ent))
+
+    if (i === focusSlotIdx) {
+      focusGoKey = goChar.key
+      focusFedWeapon = !!goWep
+      focusFedArtifacts = artFeed.length
+    }
   }
-  // Inject one extra substat via userBuff
-  const userBuffEntry = (userBuff as unknown as { premod: Record<string, { add: (v: number) => unknown }> })
-    .premod[substat]
-    ?.add(rollValue) as unknown as TagMapNodeEntries[number]
-  if (userBuffEntry) memberEntries.push(userBuffEntry)
+  if (!focusGoKey) return null
+
+  const condEntries: TagMapNodeEntries = []
+  if (opts.condState && Object.keys(opts.condState).length > 0) {
+    const filtered: Record<string, Record<string, Record<string, number>>> = {}
+    for (const [srcSlot, sheets] of Object.entries(opts.condState)) {
+      if (!presentSlots.includes(srcSlot)) continue
+      const sheetsOut: Record<string, Record<string, number>> = {}
+      for (const [sheet, names] of Object.entries(sheets)) {
+        const namesOut: Record<string, number> = {}
+        for (const [n, v] of Object.entries(names)) {
+          if (typeof v === 'number' && v !== 0) namesOut[n] = v
+        }
+        if (Object.keys(namesOut).length > 0) sheetsOut[sheet] = namesOut
+      }
+      if (Object.keys(sheetsOut).length > 0) filtered[srcSlot] = sheetsOut
+    }
+    for (const dst of presentSlots) {
+      condEntries.push(
+        ...conditionalData(
+          dst as Parameters<typeof conditionalData>[0],
+          filtered as Parameters<typeof conditionalData>[1],
+        ),
+      )
+    }
+  }
 
   const data: TagMapNodeEntries = [
-    ...teamData(['0']),
-    ...withMember('0', ...memberEntries),
-    enemyDebuff.common.lvl.add(100),
-    enemyDebuff.common.preRes.add(0.1),
+    ...teamData(presentSlots as unknown as Parameters<typeof teamData>[0]),
+    ...memberEntries,
+    ...condEntries,
+    enemyDebuff.common.lvl.add(opts.enemyLevel ?? 100),
+    enemyDebuff.common.preRes.add(opts.enemyPreRes ?? 0.1),
     ownBuff.common.critMode.add('avg'),
   ]
 
@@ -280,7 +505,7 @@ function computeViaGoWithExtraStat(
   } catch {
     return null
   }
-  const mem = calc.withTag({ src: '0' })
+  const mem = calc.withTag({ src: focusSlotKey })
   const formulas = mem.listFormulas(own.listing.formulas)
   const values: Record<string, number> = {}
   for (const f of formulas) {
@@ -292,8 +517,12 @@ function computeViaGoWithExtraStat(
     } catch { /* skip */ }
   }
   return {
-    goKey: goChar.key,
-    fed: { weapon: !!goWep, artifacts: artFeed.length },
+    goKey: focusGoKey,
+    fed: { weapon: focusFedWeapon, artifacts: focusFedArtifacts },
     values,
+    teamKeys,
   }
 }
+
+// Re-export so callers don't need to dip into good-adapter directly.
+export { artifactPieceToGoArtifact }

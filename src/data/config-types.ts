@@ -120,6 +120,11 @@ export interface TeamConfig {
     | 'spread'
   /** Per-buff toggles, keyed by buff id. Default = whatever the buff spec says. */
   buffToggles: Record<string, boolean>
+  /** Conditional buff state for GO Pando. Nested as:
+   *    condState[slotIdx 0..3 stringified][sheet][condName] = value
+   *  bool conds use 0/1, num conds use the integer value, list conds use an
+   *  option index. Default = 0/absent = "off". */
+  condState: Record<string, Record<string, Record<string, number>>>
 }
 
 export function defaultTeam(): TeamConfig {
@@ -132,6 +137,7 @@ export function defaultTeam(): TeamConfig {
     enemyDefReduction: 0,
     reaction: 'none',
     buffToggles: {},
+    condState: {},
   }
 }
 
