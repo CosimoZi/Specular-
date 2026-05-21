@@ -2,7 +2,7 @@
 // Feeds full equipment (character + weapon + 5 artifacts) so damage numbers
 // are real, not just panel-baseline.
 
-import type { ICharacter, IWeapon, IArtifact } from '@genshin-optimizer/gi/good'
+import type { ICharacter, IWeapon } from '@genshin-optimizer/gi/good'
 import {
   charData,
   teamData,
@@ -21,7 +21,56 @@ import {
   weaponConfigToGoWeapon,
   artifactPieceToGoArtifact,
   goCharacterKey,
+  goArtifactSetKey,
 } from './good-adapter'
+
+const MAIN_KEY_MAP: Record<string, string> = {
+  hpFlat: 'hp', atkFlat: 'atk',
+  hpPct: 'hp_', atkPct: 'atk_', defPct: 'def_',
+  em: 'eleMas', er: 'enerRech_',
+  critRate: 'critRate_', critDmg: 'critDMG_',
+  healingBonus: 'heal_',
+  pyroDmg: 'pyro_dmg_', hydroDmg: 'hydro_dmg_', cryoDmg: 'cryo_dmg_',
+  electroDmg: 'electro_dmg_', anemoDmg: 'anemo_dmg_', geoDmg: 'geo_dmg_',
+  dendroDmg: 'dendro_dmg_', physicalDmg: 'physical_dmg_',
+}
+const SUB_KEY_MAP: Record<string, string> = { ...MAIN_KEY_MAP, defFlat: 'def' }
+
+/** Per-piece aggregated stats for GO Pando — flattens main + 4 substats. */
+function pieceToFeed(piece: NonNullable<CharacterConfig['artifacts']['flower']>): {
+  set: string
+  stats: Array<{ key: string; value: number }>
+} | null {
+  const setKey = goArtifactSetKey(piece.setId)
+  if (!setKey) return null
+  const stats: Array<{ key: string; value: number }> = []
+  // Main stat: GO expects mainStatValue at the piece's level. We pass the
+  // displayed final value here using a known per-rarity table. For now,
+  // approximate by using the table value at piece.level (lvl 20 for 5*).
+  const mainGoKey = MAIN_KEY_MAP[piece.mainStat]
+  if (mainGoKey) {
+    // GO Pando stores percent stats as decimals internally (0.466 for 46.6%).
+    // Flat values (HP, ATK, DEF, EM) are absolute numbers.
+    const MAX_5: Record<string, number> = {
+      hp: 4780, atk: 311,
+      hp_: 0.466, atk_: 0.466, def_: 0.583,
+      eleMas: 187, enerRech_: 0.518,
+      critRate_: 0.311, critDMG_: 0.622, heal_: 0.359,
+      pyro_dmg_: 0.466, hydro_dmg_: 0.466, cryo_dmg_: 0.466,
+      electro_dmg_: 0.466, anemo_dmg_: 0.466, geo_dmg_: 0.466,
+      dendro_dmg_: 0.466, physical_dmg_: 0.583,
+    }
+    stats.push({ key: mainGoKey, value: MAX_5[mainGoKey] ?? 0 })
+  }
+  for (const s of piece.substats) {
+    const goKey = SUB_KEY_MAP[s.key]
+    if (!goKey) continue
+    // Our store already uses decimals for percent stats and raw for flat,
+    // matching GO's internal convention.
+    stats.push({ key: goKey, value: s.value })
+  }
+  return { set: setKey, stats }
+}
 
 /** Returns the GO character key (e.g. "Mona", "TravelerAnemo") if we have a
  *  mapping for the given internal id; null if unmapped (e.g. brand-new 5.x
@@ -46,19 +95,24 @@ export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
 
   const goWep = weaponConfigToGoWeapon(config.weapon, goChar.key)
 
-  const goArts: IArtifact[] = []
+  const artFeed: Array<{ set: string; stats: Array<{ key: string; value: number }> }> = []
   for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
     const piece = config.artifacts[slot]
     if (!piece) continue
-    const art = artifactPieceToGoArtifact(piece, goChar.key)
-    if (art) goArts.push(art as unknown as IArtifact)
+    const f = pieceToFeed(piece)
+    if (f) artFeed.push(f)
   }
+  void artifactPieceToGoArtifact // kept for GOOD export path
 
   const memberEntries: TagMapNodeEntries = [
     ...charData(goChar as unknown as ICharacter),
   ]
   if (goWep) memberEntries.push(...weaponData(goWep as unknown as IWeapon))
-  if (goArts.length > 0) memberEntries.push(...artifactsData(goArts))
+  if (artFeed.length > 0) {
+    memberEntries.push(
+      ...artifactsData(artFeed as unknown as Parameters<typeof artifactsData>[0]),
+    )
+  }
 
   const data: TagMapNodeEntries = [
     ...teamData(['0']),
@@ -91,7 +145,7 @@ export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
   }
   return {
     goKey: goChar.key,
-    fed: { weapon: !!goWep, artifacts: goArts.length },
+    fed: { weapon: !!goWep, artifacts: artFeed.length },
     values,
   }
 }
