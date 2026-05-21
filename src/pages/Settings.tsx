@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useCharacterConfigs } from '@/store/character-configs'
 import { useT } from '@/i18n/store'
+import { exportGood } from '@/integration/good-adapter'
 
 export default function Settings() {
   const t = useT()
@@ -32,6 +33,30 @@ export default function Settings() {
       const n = importJson(raw)
       setMessage(n > 0 ? t('settings.importDone').replace('{n}', String(n)) : t('settings.importFailed'))
     })
+  }
+
+  function onExportGood() {
+    const allConfigs = Object.values(configs)
+    if (allConfigs.length === 0) {
+      setMessage(t('settings.noConfigsToExport'))
+      return
+    }
+    const good = exportGood(allConfigs)
+    const json = JSON.stringify(good, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const stamp = new Date().toISOString().slice(0, 10)
+    a.download = `specular-good-${stamp}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    setMessage(
+      t('settings.goodExportDone')
+        .replace('{c}', String(good.characters.length))
+        .replace('{w}', String(good.weapons.length))
+        .replace('{a}', String(good.artifacts.length)),
+    )
   }
 
   function onClearAll() {
@@ -76,6 +101,17 @@ export default function Settings() {
           />
         </div>
         {message && <p className="text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
+      </section>
+
+      <section className="space-y-3 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+        <h2 className="font-medium">{t('settings.goodExport')}</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('settings.goodHint')}</p>
+        <button
+          onClick={onExportGood}
+          className="px-4 py-2 rounded-md border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+        >
+          {t('settings.goodExportBtn')}
+        </button>
       </section>
 
       <section className="space-y-3 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">

@@ -1,6 +1,8 @@
 // Bridge from our CharacterConfig to GenshinOptimizer's Pando calculator.
+// Feeds full equipment (character + weapon + 5 artifacts) so damage numbers
+// are real, not just panel-baseline.
 
-import type { ICharacter } from '@genshin-optimizer/gi/good'
+import type { ICharacter, IWeapon, IArtifact } from '@genshin-optimizer/gi/good'
 import {
   charData,
   teamData,
@@ -8,65 +10,69 @@ import {
   ownBuff,
   enemyDebuff,
   own,
+  weaponData,
+  artifactsData,
   type TagMapNodeEntries,
   genshinCalculatorWithEntries,
 } from '@genshin-optimizer/gi/formula'
+import type { CharacterConfig } from '@/data/config-types'
+import {
+  configToGoCharacter,
+  weaponConfigToGoWeapon,
+  artifactPieceToGoArtifact,
+  goCharacterKey,
+} from './good-adapter'
 
-/** Map our numeric character id → GO's CharacterKey string. Hand-maintained;
- *  expand as we add more characters. */
-export const ID_TO_GO_KEY: Record<string, string> = {
-  '10000041': 'Mona',
-  '10000002': 'Ayaka',          // 神里绫华
-  '10000063': 'Shenhe',         // 申鹤
-  '10000054': 'SangonomiyaKokomi', // 珊瑚宫心海
-  '10000058': 'YaeMiko',        // 八重神子
-  '10000073': 'Nahida',         // 纳西妲
-  '10000089': 'Furina',         // 芙宁娜
-  // TODO: rest of UID 12 (瓦雷莎、法尔伽、爱可菲、莉奈娅、兹白、哥伦比娅 — newer chars may not be in GO yet)
+/** Returns the GO character key (e.g. "Mona", "TravelerAnemo") if we have a
+ *  mapping for the given internal id; null if unmapped (e.g. brand-new 5.x
+ *  characters not yet in GO sheets). */
+export function getGoKey(characterId: number | string): string | null {
+  return goCharacterKey(characterId)
 }
 
-export interface GoCalcConfig {
-  level: number // 1..90
-  ascension: number // 0..6
-  constellation: number // 0..6
-  talents: { auto: number; skill: number; burst: number }
+export interface GoComputeResult {
+  goKey: string
+  /** Whether weapon/artifact data was fed (vs panel-only). */
+  fed: { weapon: boolean; artifacts: number }
+  /** Map of formula tag name → computed value. */
+  values: Record<string, number>
 }
 
-/** Compute GO-Pando damage / panel values for the given character. Returns
- *  formula-name → value (e.g. `hp`, `atk`, `def`, `em`, `critRate_`,
- *  `critDMG_`, plus reaction zones). Returns null if character has no GO key
- *  mapping (i.e. we haven't whitelisted it yet). */
-export function computeViaGo(
-  characterId: number | string,
-  cfg: GoCalcConfig,
-): { goKey: string; values: Record<string, number> } | null {
-  const goKey = ID_TO_GO_KEY[String(characterId)]
-  if (!goKey) return null
+/** Compute via GO Pando with the character's full equipment.
+ *  Returns null if character isn't in GO sheets. */
+export function computeViaGo(config: CharacterConfig): GoComputeResult | null {
+  const goChar = configToGoCharacter(config)
+  if (!goChar) return null
 
-  const char: ICharacter = {
-    key: goKey as unknown as ICharacter['key'],
-    level: cfg.level,
-    ascension: cfg.ascension,
-    constellation: cfg.constellation,
-    talent: {
-      auto: Math.max(0, cfg.talents.auto - 1), // GO talent = display lvl - 1
-      skill: Math.max(0, cfg.talents.skill - 1),
-      burst: Math.max(0, cfg.talents.burst - 1),
-    },
-  } as ICharacter
+  const goWep = weaponConfigToGoWeapon(config.weapon, goChar.key)
+
+  const goArts: IArtifact[] = []
+  for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
+    const piece = config.artifacts[slot]
+    if (!piece) continue
+    const art = artifactPieceToGoArtifact(piece, goChar.key)
+    if (art) goArts.push(art as unknown as IArtifact)
+  }
+
+  const memberEntries: TagMapNodeEntries = [
+    ...charData(goChar as unknown as ICharacter),
+  ]
+  if (goWep) memberEntries.push(...weaponData(goWep as unknown as IWeapon))
+  if (goArts.length > 0) memberEntries.push(...artifactsData(goArts))
 
   const data: TagMapNodeEntries = [
     ...teamData(['0']),
-    ...withMember('0', ...charData(char)),
+    ...withMember('0', ...memberEntries),
     enemyDebuff.common.lvl.add(100),
     enemyDebuff.common.preRes.add(0.1),
     ownBuff.common.critMode.add('avg'),
   ]
+
   let calc
   try {
     calc = genshinCalculatorWithEntries(data)
   } catch (e) {
-    console.warn(`[Specular] GO calc init failed for ${goKey}:`, (e as Error).message)
+    console.warn(`[Specular] GO calc init failed for ${goChar.key}:`, (e as Error).message)
     return null
   }
   const mem = calc.withTag({ src: '0' })
@@ -78,15 +84,14 @@ export function computeViaGo(
     const name = String(tag?.name ?? tag?.q ?? 'unnamed')
     try {
       const val = mem.compute(f as unknown as Parameters<typeof mem.compute>[0]).val
-      if (typeof val === 'number') values[name] = val
+      if (typeof val === 'number' && Number.isFinite(val)) values[name] = val
     } catch {
-      // Skip formulas that need weapon/artifacts (will work once we feed them)
+      // Some formulas need conditional buffs we haven't set — skip silently
     }
   }
-  return { goKey, values }
-}
-
-/** Legacy alias for the Mona-specific test. */
-export function computeMonaPoc(cfg: GoCalcConfig): Record<string, number> {
-  return computeViaGo(10000041, cfg)?.values ?? {}
+  return {
+    goKey: goChar.key,
+    fed: { weapon: !!goWep, artifacts: goArts.length },
+    values,
+  }
 }

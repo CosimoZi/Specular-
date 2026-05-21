@@ -1,16 +1,24 @@
-// Verify GO Pando calc actually computes Mona's damage formulas end-to-end.
+// Verify GO Pando calc end-to-end with a CharacterConfig + minimal weapon.
 import { describe, it, expect } from 'vitest'
-import { computeMonaPoc } from '../../integration/go-calc'
+import { computeViaGo } from '../../integration/go-calc'
+import { defaultConfig } from '@/data/config-types'
 
-describe('GO Pando calc — Mona PoC', () => {
-  it('returns non-trivial damage numbers for lvl 90 / talent 10·10·10 / C6', () => {
-    const out = computeMonaPoc({
-      level: 90, ascension: 6, constellation: 6,
-      talents: { auto: 10, skill: 10, burst: 10 },
-    })
-    console.log('Mona damage formulas (lvl 90, C6, 10/10/10):', out)
-    expect(Object.keys(out).length).toBeGreaterThan(0)
-    // Some formula should be non-zero
-    expect(Object.values(out).some((v) => v > 0)).toBe(true)
+describe('GO Pando calc — character config integration', () => {
+  it('Mona L90 / C6 / 10·10·10, panel-only', () => {
+    const config = {
+      ...defaultConfig(10000041),
+      constellation: 6,
+    }
+    const out = computeViaGo(config)
+    expect(out).not.toBeNull()
+    expect(out!.goKey).toBe('Mona')
+    expect(out!.fed).toEqual({ weapon: false, artifacts: 0 })
+    expect(out!.values.hp).toBeGreaterThan(10000) // Mona L90 ≈ 10409
+    expect(out!.values.overloaded).toBeGreaterThan(0)
+  })
+
+  it('Returns null for unmapped character id', () => {
+    const config = { ...defaultConfig(99999999) }
+    expect(computeViaGo(config)).toBeNull()
   })
 })
