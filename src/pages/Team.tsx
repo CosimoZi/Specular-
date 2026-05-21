@@ -6,29 +6,6 @@ import {
   listCharacters,
   getCharacterIndex,
 } from '@/data'
-import {
-  loadCharacterMeta,
-  hitMultiplier,
-  normalizeElement,
-  type CharacterMeta,
-  type ExtractedHit,
-} from '@/data/meta'
-import { deriveConfigStats, type DerivedStatsInput } from '@/data/config-to-stats'
-import {
-  aggregateStats,
-  calcDamage,
-  type DamageElement,
-  type Reaction,
-  type StatBag,
-} from '@/engine'
-import {
-  aggregateZoneBuffs,
-  partValue,
-  type BuffSpec,
-  type ZoneBuffs,
-  type Position,
-} from '@/engine/buff-zones'
-import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
 import type { GoComputeResult, SubstatMargin, CondInfo } from '@/integration/go-calc'
 import { wiringTierForGoKey } from '@/integration/go-coverage'
 import { goCharacterKey } from '@/integration/good-adapter'
@@ -37,86 +14,21 @@ import {
   type BuffEntry,
   type BuffSourceType,
 } from '@/integration/buff-sources'
-import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
 import { useCharacterConfigs } from '@/store/character-configs'
 import { useTeamConfig } from '@/store/team-config'
 import { isConfigured, type TeamConfig, type CharacterConfig } from '@/data/config-types'
 
-function reactionFromPick(pick: TeamConfig['reaction']): Reaction {
-  switch (pick) {
-    case 'vape_strong': return { kind: 'vape', trigger: 'pyro_on_hydro' }
-    case 'vape_weak': return { kind: 'vape', trigger: 'hydro_on_pyro' }
-    case 'melt_strong': return { kind: 'melt', trigger: 'pyro_on_cryo' }
-    case 'melt_weak': return { kind: 'melt', trigger: 'cryo_on_pyro' }
-    case 'aggravate': return { kind: 'aggravate' }
-    case 'spread': return { kind: 'spread' }
-    default: return { kind: 'none' }
-  }
-}
+// Removed import section: hitMultiplier, normalizeElement, ExtractedHit,
+// deriveConfigStats, aggregateStats, calcDamage, DamageElement, Reaction,
+// StatBag, aggregateZoneBuffs, partValue, BuffSpec, ZoneBuffs, Position,
+// BUFFS, eligibleBuffsForTeam, ALL_SUBSTATS, MAX_ROLL_VALUES, Substat.
+// All belong to the legacy pre-GO buff/damage path that's been superseded
+// by the GO Pando pipeline.
 
-function reactionKindOf(pick: TeamConfig['reaction']): 'vape' | 'melt' | 'aggravate' | 'spread' | 'none' {
-  switch (pick) {
-    case 'vape_strong': case 'vape_weak': return 'vape'
-    case 'melt_strong': case 'melt_weak': return 'melt'
-    case 'aggravate': return 'aggravate'
-    case 'spread': return 'spread'
-    default: return 'none'
-  }
-}
-
-type ComputedRow = {
-  role: 'auto' | 'skill' | 'burst'
-  hit: ExtractedHit
-  multiplier: number
-  out: ReturnType<typeof calcDamage>
-  appliedZones: ZoneBuffs
-}
-
-/** Convert ZoneBuffs (for one hit) into a StatBag delta + per-hit / per-target overrides. */
-function zonesToOverrides(zones: ZoneBuffs, hitElement: DamageElement): {
-  statBagDelta: StatBag
-  targetResShred: number
-  targetDefIgnore: number
-  targetDefShred: number
-  hitReactionBonus: number
-  hitAdditiveFlat: number
-} {
-  const elemKey: keyof StatBag = (() => {
-    switch (hitElement) {
-      case 'Pyro': return 'pyroDmg'
-      case 'Hydro': return 'hydroDmg'
-      case 'Cryo': return 'cryoDmg'
-      case 'Electro': return 'electroDmg'
-      case 'Anemo': return 'anemoDmg'
-      case 'Geo': return 'geoDmg'
-      case 'Dendro': return 'dendroDmg'
-      case 'Physical': return 'physicalDmg'
-    }
-  })()
-  const bag: StatBag = {
-    atkFlat: zones.baseAtkFlat,
-    atkPct: zones.baseAtkPct,
-    hpFlat: zones.baseHpFlat,
-    hpPct: zones.baseHpPct,
-    defFlat: zones.baseDefFlat,
-    defPct: zones.baseDefPct,
-    em: zones.em,
-    er: zones.er,
-    critRate: zones.critRate,
-    critDmg: zones.critDmg,
-    [elemKey]: zones.dmgBonus,
-  }
-  return {
-    statBagDelta: bag,
-    targetResShred: zones.resShred,
-    targetDefIgnore: zones.defIgnore,
-    targetDefShred: zones.defShred,
-    hitReactionBonus: zones.reactionBonus,
-    hitAdditiveFlat: zones.additiveFlat,
-  }
-}
+// Legacy helper removed: reactionFromPick, reactionKindOf, ComputedRow,
+// zonesToOverrides, computeFocusRows, substatToBag, BuffRow, FocusDamagePanel.
 
 export default function Team() {
   const t = useT()
@@ -125,7 +37,6 @@ export default function Team() {
   const setSlot = useTeamConfig((s) => s.setSlot)
   const setFocus = useTeamConfig((s) => s.setFocus)
   const teamPatch = useTeamConfig((s) => s.patch)
-  const toggleBuff = useTeamConfig((s) => s.toggleBuff)
   const setCond = useTeamConfig((s) => s.setCond)
   // Flatten characters → active-build-only map (for buff filtering / picker).
   const characters = useCharacterConfigs((s) => s.characters)
@@ -142,16 +53,6 @@ export default function Team() {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null)
   const [pickerQuery, setPickerQuery] = useState('')
 
-  const [metaMap, setMetaMap] = useState<Record<string, CharacterMeta>>({})
-  useEffect(() => {
-    const ids = team.slots.filter((s): s is number | string => s !== null).map(String)
-    for (const id of ids) {
-      if (metaMap[id]) continue
-      loadCharacterMeta(id).then((m) => setMetaMap((p) => ({ ...p, [id]: m }))).catch(() => {})
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team.slots.join(',')])
-
   const focusIdx = team.focusIndex ?? team.slots.findIndex((s) => s !== null)
   const focusCharId = focusIdx >= 0 ? team.slots[focusIdx] : null
   // Resolve focusConfig stably from configsMap so it doesn't flip identity on
@@ -161,8 +62,6 @@ export default function Team() {
     if (focusCharId == null) return null
     return configsMap[String(focusCharId)] ?? null
   }, [focusCharId, configsMap])
-  const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
-  const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
 
   // Per-slot cond list (which conditional buffs a slot's character exposes).
   // Loaded lazily via the same go-calc dynamic-imported module so we don't
@@ -228,68 +127,6 @@ export default function Team() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusIdx, teamConfigsKey, condStateKey, team.enemyLevel, team.enemyBaseRes])
 
-  const eligibleBuffs = useMemo(() => {
-    const teamIds = team.slots.filter((s): s is number | string => s !== null)
-    return eligibleBuffsForTeam(teamIds, configsMap)
-  }, [team.slots, configsMap])
-
-  /** For each eligible buff, an {spec, on, sourceTalentLevels} entry that the
-   *  zone aggregator consumes. */
-  const buffEvalList = useMemo(() => {
-    return eligibleBuffs.map((spec) => ({
-      spec,
-      on: team.buffToggles[spec.id] ?? spec.defaultOn,
-      sourceTalentLevels: configsMap[String(spec.sourceCharacterId)]?.talentLevels,
-    }))
-  }, [eligibleBuffs, team.buffToggles, configsMap])
-
-  // Compute focus damage rows + substat marginal values
-  const [focusState, setFocusState] = useState<{
-    rows: ComputedRow[]
-    finalStats: ReturnType<typeof aggregateStats> | null
-    substatValues: Array<{ substat: Substat; absoluteDelta: number; pctDelta: number }>
-  }>({ rows: [], finalStats: null, substatValues: [] })
-
-  useEffect(() => {
-    if (!focusCharId || !focusConfig || !focusMeta || !focusIdx_data) {
-      setFocusState({ rows: [], finalStats: null, substatValues: [] })
-      return
-    }
-    let cancelled = false
-    deriveConfigStats(focusConfig, focusMeta, focusIdx_data.element)
-      .then((derived) => {
-        if (cancelled) return
-        const characterElement = normalizeElement(focusIdx_data.element)
-        const baseline = computeFocusRows(focusConfig, focusMeta, derived, characterElement, team, buffEvalList)
-        const baselineTotal = baseline.rows.reduce((s, r) => s + r.out.avg, 0)
-
-        let substatValues: Array<{ substat: Substat; absoluteDelta: number; pctDelta: number }> = []
-        if (baselineTotal > 0) {
-          substatValues = ALL_SUBSTATS.map((s) => {
-            const perturbation = substatToBag(s)
-            const r = computeFocusRows(focusConfig, focusMeta, {
-              ...derived,
-              bonusBags: [...derived.bonusBags, perturbation],
-            }, characterElement, team, buffEvalList)
-            const newTotal = r.rows.reduce((acc, row) => acc + row.out.avg, 0)
-            return {
-              substat: s,
-              absoluteDelta: newTotal - baselineTotal,
-              pctDelta: ((newTotal - baselineTotal) / baselineTotal) * 100,
-            }
-          }).sort((a, b) => b.absoluteDelta - a.absoluteDelta)
-        }
-
-        setFocusState({
-          rows: baseline.rows,
-          finalStats: baseline.finalStats,
-          substatValues,
-        })
-      })
-      .catch(() => setFocusState({ rows: [], finalStats: null, substatValues: [] }))
-    return () => { cancelled = true }
-  }, [focusCharId, focusConfig, focusMeta, focusIdx_data, team, buffEvalList])
-
   const configuredCharacters = useMemo(
     () => allCharacters.filter((c) => isConfigured(configsMap[String(c.id)])),
     [allCharacters, configsMap],
@@ -347,32 +184,6 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-        <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-          {t('team.buffsTitle')} {focusCharId != null && <span className="text-xs font-normal text-zinc-500">· {t('team.forFocus')}: {focusIdx_data ? displayName(focusIdx_data, locale) : ''}</span>}
-        </h3>
-        {eligibleBuffs.length === 0 ? (
-          <p className="text-sm text-zinc-500 px-4 py-3">{t('team.noBuffsAvailable')}</p>
-        ) : (
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {eligibleBuffs.map((b) => (
-              <BuffRow
-                key={b.id}
-                buff={b}
-                on={team.buffToggles[b.id] ?? b.defaultOn}
-                onToggle={(on) => toggleBuff(b.id, on)}
-                locale={locale}
-                sourceTalentLevels={configsMap[String(b.sourceCharacterId)]?.talentLevels}
-                t={t}
-              />
-            ))}
-          </div>
-        )}
-        <p className="text-xs text-zinc-500 px-4 py-2 bg-zinc-50/50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-800">
-          {t('team.buffsCoverage')} ({new Set(BUFFS.map((b) => b.sourceCharacterId)).size} {t('team.charactersCoveredSuffix')})
-        </p>
-      </section>
-
       {/* Conditional buffs (via GO Pando) — character-specific toggles like
           Bennett's Q field, Nahida's burst-active flag, etc. Only renders
           for team members whose vendored GO sheet actually wires conds. */}
@@ -385,16 +196,6 @@ export default function Team() {
         t={t}
         onChange={(slotIdx, sheet, condName, value) => setCond(slotIdx, sheet, condName, value)}
       />
-
-      {focusMeta && focusIdx_data && focusState.finalStats && (
-        <FocusDamagePanel
-          meta={focusMeta}
-          rows={focusState.rows}
-          finalStats={focusState.finalStats}
-          substatValues={focusState.substatValues}
-          t={t}
-        />
-      )}
 
       {goResult && <GoPandoPanel result={goResult} />}
       {goMargins && <GoSubstatPanel data={goMargins} />}
@@ -416,108 +217,6 @@ export default function Team() {
       )}
     </div>
   )
-}
-
-// Per-hit zone-aware damage compute.
-function computeFocusRows(
-  config: CharacterConfig,
-  meta: CharacterMeta,
-  derived: DerivedStatsInput,
-  characterElement: DamageElement,
-  team: TeamConfig,
-  buffEvalList: Array<{ spec: BuffSpec; on: boolean; sourceTalentLevels?: { auto: number; skill: number; burst: number } }>,
-): { rows: ComputedRow[]; finalStats: ReturnType<typeof aggregateStats> } {
-  // Receiver context — TODO read from config.position when we add it.
-  const receiverPosition: Position = 'frontline'
-  const receiverCharacterId = config.characterId
-  const reaction = reactionFromPick(team.reaction)
-  const reactionKind = reactionKindOf(team.reaction)
-
-  // Solo (no team buffs) final stats — useful for the side panel + as baseline.
-  const soloStats = aggregateStats([
-    { atkFlat: derived.baseAtk, hpFlat: derived.baseHp, defFlat: derived.baseDef },
-    ...derived.bonusBags,
-  ])
-
-  const baseRes = team.enemyBaseRes / 100
-  const baseResMap = {
-    Pyro: baseRes, Hydro: baseRes, Cryo: baseRes, Electro: baseRes,
-    Anemo: baseRes, Geo: baseRes, Dendro: baseRes, Physical: baseRes,
-  }
-  const baseResShred = team.enemyResReduction / 100
-
-  const rows: ComputedRow[] = []
-  const sections: Array<{ role: 'auto' | 'skill' | 'burst'; lvl: number }> = [
-    { role: 'auto', lvl: config.talentLevels.auto },
-    { role: 'skill', lvl: config.talentLevels.skill },
-    { role: 'burst', lvl: config.talentLevels.burst },
-  ]
-  const scalingOverride = config.scalingOverride ?? {}
-  for (const { role, lvl } of sections) {
-    const tlt = meta.talents[role]
-    if (!tlt) continue
-    for (const hit of tlt.hits) {
-      const m = hitMultiplier(tlt, hit, lvl)
-      if (m == null) continue
-      const key = `${role}:${hit.paramIndex}:${hit.label}`
-      const scaling = scalingOverride[key] ?? hit.scaling
-      // Filter and aggregate per-hit zone buffs
-      const zones = aggregateZoneBuffs(buffEvalList, {
-        hitElement: characterElement,
-        hitType: hit.hitType,
-        receiverPosition,
-        sourceCharacterId: 0, // overridden by aggregator per part
-        receiverCharacterId,
-        reactionKind,
-      })
-      const ov = zonesToOverrides(zones, characterElement)
-      const perHitStats = aggregateStats([
-        { atkFlat: derived.baseAtk, hpFlat: derived.baseHp, defFlat: derived.baseDef },
-        ...derived.bonusBags,
-        ov.statBagDelta,
-      ])
-      const attacker = { level: config.level, stats: perHitStats }
-      const target = {
-        level: team.enemyLevel,
-        resistance: baseResMap,
-        resReduction: {
-          Pyro: baseResShred + ov.targetResShred, Hydro: baseResShred + ov.targetResShred,
-          Cryo: baseResShred + ov.targetResShred, Electro: baseResShred + ov.targetResShred,
-          Anemo: baseResShred + ov.targetResShred, Geo: baseResShred + ov.targetResShred,
-          Dendro: baseResShred + ov.targetResShred, Physical: baseResShred + ov.targetResShred,
-        },
-        defReduction: team.enemyDefReduction / 100 + ov.targetDefShred,
-        defIgnore: ov.targetDefIgnore,
-      }
-      const out = calcDamage(
-        attacker,
-        target,
-        {
-          label: hit.label, scaling, multiplier: m, element: characterElement, hitType: hit.hitType,
-          reactionBonus: ov.hitReactionBonus,
-        },
-        reaction,
-      )
-      rows.push({ role, hit: { ...hit, scaling }, multiplier: m, out, appliedZones: zones })
-    }
-  }
-  return { rows, finalStats: soloStats }
-}
-
-function substatToBag(substat: Substat): StatBag {
-  const roll = MAX_ROLL_VALUES[substat]
-  switch (substat) {
-    case 'critRate': return { critRate: roll }
-    case 'critDmg': return { critDmg: roll }
-    case 'atkPct': return { atkPct: roll }
-    case 'hpPct': return { hpPct: roll }
-    case 'defPct': return { defPct: roll }
-    case 'em': return { em: roll }
-    case 'er': return { er: roll }
-    case 'atkFlat': return { atkFlat: roll }
-    case 'hpFlat': return { hpFlat: roll }
-    case 'defFlat': return { defFlat: roll }
-  }
 }
 
 function SlotCard({
@@ -928,55 +627,6 @@ function CoverageBanner({ t }: { t: (k: string, f?: string) => string }) {
   )
 }
 
-function BuffRow({
-  buff, on, onToggle, locale, sourceTalentLevels, t,
-}: {
-  buff: BuffSpec
-  on: boolean
-  onToggle: (on: boolean) => void
-  locale: 'zh' | 'en'
-  sourceTalentLevels?: { auto: number; skill: number; burst: number }
-  t: (k: string, f?: string) => string
-}) {
-  const source = getCharacterIndex(buff.sourceCharacterId)
-  return (
-    <label className="flex items-start gap-3 px-4 py-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
-      <input
-        type="checkbox"
-        checked={on}
-        onChange={(e) => onToggle(e.target.checked)}
-        className="mt-1 cursor-pointer"
-      />
-      <div className="flex-1 min-w-0">
-        <div className="text-sm flex items-center gap-2">
-          {source && <img src={iconUrl(source.icon)} alt="" className="w-5 h-5 rounded inline-block flex-shrink-0" />}
-          <span className="font-medium">{buff.label[locale]}</span>
-        </div>
-        <p className="text-xs text-zinc-500 mt-0.5">{buff.description[locale]}</p>
-        <div className="text-[10px] text-zinc-400 mt-1 flex flex-wrap gap-1.5">
-          {buff.parts.map((p, i) => (
-            <span key={i} className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">
-              {p.zone} · {formatPartValue(buff, i, sourceTalentLevels)}
-              {p.cond?.element && ` · ${t(`element.${p.cond.element}`)}`}
-              {p.cond?.hitType && ` · ${p.cond.hitType.join('/')}`}
-              {p.cond?.selfOnly && ' · self'}
-            </span>
-          ))}
-        </div>
-      </div>
-    </label>
-  )
-}
-
-function formatPartValue(spec: BuffSpec, idx: number, talents?: { auto: number; skill: number; burst: number }): string {
-  const v = partValue(spec, idx, talents)
-  const zone = spec.parts[idx].zone
-  if (zone === 'em' || zone === 'baseAtkFlat' || zone === 'baseHpFlat' || zone === 'baseDefFlat' || zone === 'additiveFlat') {
-    return `+${v.toFixed(0)}`
-  }
-  return `+${(v * 100).toFixed(1)}%`
-}
-
 function PickerModal({
   query, setQuery, characters, locale, t, onClose, onPick,
 }: {
@@ -1020,110 +670,6 @@ function PickerModal({
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-function FocusDamagePanel({
-  meta, rows, finalStats, substatValues, t,
-}: {
-  meta: CharacterMeta
-  rows: ComputedRow[]
-  finalStats: ReturnType<typeof aggregateStats>
-  substatValues: Array<{ substat: Substat; absoluteDelta: number; pctDelta: number }>
-  t: (k: string, f?: string) => string
-}) {
-  const groups = useMemo(() => {
-    const g: Record<string, ComputedRow[]> = { auto: [], skill: [], burst: [] }
-    for (const r of rows) g[r.role].push(r)
-    return g
-  }, [rows])
-  const roleLabels: Record<string, string> = {
-    auto: `${t('talent.normalFull')} · ${meta.talents.auto?.name ?? ''}`,
-    skill: `${t('talent.skillFull')} · ${meta.talents.skill?.name ?? ''}`,
-    burst: `${t('talent.burstFull')} · ${meta.talents.burst?.name ?? ''}`,
-  }
-  const fmt = (n: number) => Math.round(n).toLocaleString()
-  const positive = substatValues.filter((s) => s.absoluteDelta > 0)
-  const maxDelta = positive[0]?.absoluteDelta ?? 1
-
-  return (
-    <div className="space-y-4">
-      <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3 bg-zinc-50/50 dark:bg-zinc-900/50 text-sm grid grid-cols-3 sm:grid-cols-6 gap-3">
-        <FinalStat label={t('stat.atk')} value={fmt(finalStats.atk)} />
-        <FinalStat label={t('stat.hp')} value={fmt(finalStats.hp)} />
-        <FinalStat label={t('stat.def')} value={fmt(finalStats.def)} />
-        <FinalStat label={t('stat.em')} value={fmt(finalStats.em)} />
-        <FinalStat label="CR/CD" value={`${(finalStats.critRate * 100).toFixed(1)}% / ${(finalStats.critDmg * 100).toFixed(1)}%`} />
-        <FinalStat label="ER" value={`${(finalStats.er * 100).toFixed(0)}%`} />
-      </section>
-
-      {(['auto', 'skill', 'burst'] as const).map((role) => {
-        const list = groups[role]
-        if (!list.length) return null
-        return (
-          <section key={role} className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-            <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-              {roleLabels[role]}
-            </h3>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-zinc-500 bg-zinc-50/50 dark:bg-zinc-900/50">
-                <tr>
-                  <th className="text-left px-4 py-2 font-normal">{t('damage.skill')}</th>
-                  <th className="text-left px-2 py-2 font-normal w-20">{t('damage.multiplier')}</th>
-                  <th className="text-left px-2 py-2 font-normal w-16">{t('damage.scaling')}</th>
-                  <th className="text-right px-2 py-2 font-normal">{t('damage.nonCrit')}</th>
-                  <th className="text-right px-2 py-2 font-normal">{t('damage.crit')}</th>
-                  <th className="text-right px-4 py-2 font-normal">{t('damage.avg')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((r, i) => (
-                  <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                    <td className="px-4 py-2">{r.hit.label}</td>
-                    <td className="px-2 py-2 text-zinc-500 text-xs">{(r.multiplier * 100).toFixed(1)}%</td>
-                    <td className="px-2 py-2 text-xs">{t(`damage.scaling.${r.hit.scaling}`)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{fmt(r.out.nonCrit)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums text-amber-700 dark:text-amber-400">{fmt(r.out.crit)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(r.out.avg)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )
-      })}
-
-      {substatValues.length > 0 && (
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-          <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-            {t('substat.title')}
-          </h3>
-          <div className="px-4 py-2 text-xs text-zinc-500 border-b border-zinc-100 dark:border-zinc-800">
-            {t('substat.hintV2')}
-          </div>
-          <table className="w-full text-sm">
-            <tbody>
-              {substatValues.map((s, i) => {
-                const width = s.absoluteDelta > 0 ? (s.absoluteDelta / maxDelta) * 100 : 0
-                const isPositive = s.absoluteDelta > 0
-                return (
-                  <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                    <td className="px-4 py-2 w-40">{t(`substat.${s.substat}`)}</td>
-                    <td className="px-2 py-2">
-                      <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
-                        <div className={`h-full ${isPositive ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-zinc-400'}`} style={{ width: `${width}%` }} />
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums">{isPositive ? '+' : ''}{fmt(s.absoluteDelta)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-zinc-500">{s.pctDelta >= 0 ? '+' : ''}{s.pctDelta.toFixed(2)}%</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </section>
-      )}
     </div>
   )
 }
