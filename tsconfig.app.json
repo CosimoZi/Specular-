@@ -9,7 +9,40 @@
 
     "paths": {
       "@/*": ["./src/*"],
-      "@genshin-optimizer/pando/engine": ["./vendor/go/pando/engine/src/index.ts"]
+      "@genshin-optimizer/pando/engine": ["./vendor/go/pando/engine/src/index.ts"],
+      "@genshin-optimizer/common/util": ["./vendor/go/common/util/src/index.ts"],
+      "@genshin-optimizer/gi/consts": ["./vendor/go/gi/consts/src/index.ts"],
+      "@genshin-optimizer/gi/keymap": ["./vendor/go/gi/keymap/src/index.ts"],
+      "@genshin-optimizer/gi/util": ["./vendor/go/gi/util/src/index.ts"],
+      "@genshin-optimizer/gi/wr": ["./vendor/go/gi/wr/src/index.ts"],
+      "@genshin-optimizer/gi/schema": ["./vendor/go/gi/schema/src/index.ts"],
+      "@genshin-optimizer/gi/stats": ["./vendor/go/gi/stats/src/index.ts"],
+      "@genshin-optimizer/gi/dm": ["./vendor/go/gi/dm/src/index.ts"],
+      "@genshin-optimizer/gi/db": ["./vendor/go/gi/db/src/index.ts"],
+      "@genshin-optimizer/gi/good": ["./vendor/go/gi/good/src/index.ts"],
+      "@genshin-optimizer/gi/formula": ["./vendor/go/gi/formula/src/index.ts"],
+      "@genshin-optimizer/gi/sheets": ["./vendor/go/gi/sheets/src/index.ts"],
+      "@genshin-optimizer/gi/i18n": ["./vendor/go/gi/i18n/src/index.ts"],
+      "@genshin-optimizer/gi/svgicons": ["./vendor/go/gi/svgicons/src/index.ts"],
+      "@genshin-optimizer/gi/uidata": ["./vendor/go/gi/uidata/src/index.ts"],
+      "@genshin-optimizer/common/database": ["./vendor/go/common/database/src/index.ts"],
+      "@genshin-optimizer/common/pipeline": ["./vendor/go/common/pipeline/src/index.ts"],
+      "@genshin-optimizer/common/svgicons": ["./vendor/go/common/svgicons/src/index.ts"],
+      "@genshin-optimizer/common/ui": ["./vendor/go/common/ui/src/index.ts"],
+      "@genshin-optimizer/game-opt/engine": ["./vendor/go/game-opt/engine/src/index.ts"],
+      "@genshin-optimizer/game-opt/formula": ["./vendor/go/game-opt/formula/src/index.ts"],
+      "@genshin-optimizer/gi/wr-types": ["./vendor/go/gi/wr-types/src/index.ts"],
+      "@genshin-optimizer/gi/theme": ["./vendor/go/gi/theme/src/index.ts"],
+      "@genshin-optimizer/gi/ui": ["./vendor/go/gi/ui/src/index.ts"],
+      "@genshin-optimizer/gi/localization": ["./vendor/go/gi/localization/src/index.ts"],
+      "@genshin-optimizer/gi/dm-localization": ["./vendor/go/gi/dm-localization/src/index.ts"],
+      "@genshin-optimizer/gi/solver": ["./vendor/go/gi/solver/src/index.ts"],
+      "@genshin-optimizer/gi/solver-tc": ["./vendor/go/gi/solver-tc/src/index.ts"],
+      "@genshin-optimizer/common/react-util": ["./vendor/go/common/react-util/src/index.ts"],
+      "@genshin-optimizer/common/img-util": ["./vendor/go/common/img-util/src/index.ts"],
+      "@genshin-optimizer/common/localization": ["./vendor/go/common/localization/src/index.ts"],
+      "@genshin-optimizer/game-opt/solver": ["./vendor/go/game-opt/solver/src/index.ts"],
+      "@genshin-optimizer/gi/assets": ["./vendor/stubs/gi-assets.ts"]
     },
 
     /* Bundler mode */
@@ -26,6 +59,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "vendor/go"],
-  "exclude": ["vendor/**/*.spec.ts", "vendor/**/*.test.ts"]
+  "include": ["src"],
+  "exclude": ["vendor"]
 }
