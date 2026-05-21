@@ -31,12 +31,13 @@ export const CalamityQueller: WeaponSheet = {
     for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, dmgBonus, passive1Src)
 
     // Passive 2: stack ATK%, doubled when off-field. On/off-field comes from
-    // the team-level slot position. When off-field we default the stack count
-    // to max (6) — matching the typical "swap out after stacking up" rotation.
-    // User can still dial it down via the cond input if they want.
+    // the team-level slot position. Default stack count is max (6) regardless
+    // of position — Consummation builds up over 6 seconds on-field too; the
+    // only thing the position changes is the ×1 vs ×2 multiplier. User can
+    // dial it down via the cond input if they want.
     const onField = (scope.get('onField') ?? 1) !== 0
     const stacksRaw = condState.CalamityQueller?.stack
-    const stacks = stacksRaw != null ? stacksRaw : (onField ? 0 : 6)
+    const stacks = stacksRaw != null ? stacksRaw : 6
     if (stacks <= 0) return
     const mult = onField ? 1 : 2
     const atkPctPerStack = ATK_PER_STACK[r]!
