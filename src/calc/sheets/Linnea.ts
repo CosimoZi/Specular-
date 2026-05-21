@@ -29,16 +29,30 @@ import type { CharacterSheet } from '../sheet-types'
 export const Linnea: CharacterSheet = {
   key: 'Linnea',
   conds: [
-    // TODO: settle the cond model. Tentative:
-    // { name: 'moonTagged', type: 'bool', label: '场上角色是月兆角色(A4 EM 转换目标)' },
-    // { name: 'a1RESShred', type: 'bool', label: 'A1 露米在场:敌人 -15% 岩抗' },
-    // { name: 'moonFull', type: 'bool', label: 'A1 月兆·满辉(露米召出后再 -15% 岩抗)' },
-    // { name: 'c1Stacks', type: 'num', label: 'C1 历览编录 (0-18)', intOnly: true, min: 0, max: 18 },
-    // { name: 'c2Resonance', type: 'bool', label: 'C2 月笼谐奏 (水/岩 CDmg +40%)' },
-    // { name: 'c4StacksDef', type: 'num', label: 'C4 月笼谐奏 (DEF +25%/层)', intOnly: true, min: 0, max: 4 },
+    { name: 'lumiActive', type: 'bool', label: 'A1 露米在场(敌人岩抗 -15%)' },
+    { name: 'moonFull', type: 'bool', label: 'A1 月兆·满辉(露米召出后岩抗再 -15%)' },
+    { name: 'c2Resonance', type: 'bool', label: 'C2 月笼谐奏(水/岩 暴击伤害 +40%)' },
+    { name: 'c4DefStacks', type: 'num', label: 'C4 月笼谐奏(DEF +25%/层 最多 2)', intOnly: true, min: 0, max: 2 },
+    // TODO (needs engine extension):
+    // - A4: DEF×5% → 场上角色 EM (cross-character buff propagation needed)
+    // - A6: DEF/100 × 0.7% → 月结晶 reaction base DMG (cap 14%, moon-reaction layer)
+    // - C1: 历览编录 stacks → 月结晶 dmg += DEF × 75% (moon-reaction layer)
+    // - C6: stacks 增强 + 月结晶 +25% (same)
+    // - Burst heal (DEF-scaling) — not a damage formula
+    // - Skill: Lumi 形态切换 + 攻击 (companion-damage layer needed)
   ],
-  apply(_scope, _ctx, _condState) {
-    // No panel-stat buffs from Linnea's character passives — A4 / C4 do affect
-    // DEF and EM but they're cond-gated; leave for the cond-model pass.
+  apply(scope, ctx, condState) {
+    // C2: 月笼谐奏 → hydro/geo CDmg +40%. We don't have per-element CDmg slots,
+    // so this fires only when the focus character's outgoing damage is hydro/geo.
+    // For Linnea (geo) her own outgoing is geo, so apply directly to critDMG_.
+    if (ctx.constellation >= 2 && condState.Linnea?.c2Resonance) {
+      scope.add('premod.critDMG_', 0.4, '月笼谐奏(C2)')
+    }
+    // C4: per-stack DEF +25%, max 2 stacks (self only, since "active char" coincides
+    // with focus in our single-character build pipeline).
+    if (ctx.constellation >= 4) {
+      const s = condState.Linnea?.c4DefStacks ?? 0
+      if (s > 0) scope.add('premod.def_', 0.25 * s, `月笼谐奏(C4, ${s} 层)`)
+    }
   },
 }

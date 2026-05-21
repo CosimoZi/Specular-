@@ -41,8 +41,25 @@ export function applyLinneaFormulaBuffs(
   _scope: import('../scope').Scope,
   _condState: Record<string, Record<string, number>>,
 ) {
-  // TODO: A1 RES shred, A4 EM transfer, C1 stack-consume bonus DMG,
-  // C2 hydro/geo CDmg, C4 DEF buff.
+  // Linnea has no damage-side buffs that gate by element/move at the formula
+  // level (her stat-only buffs C2/C4 live in Linnea.ts apply()). A4/A6/C1/C6
+  // need engine extensions (cross-char EM, moon-reaction layer, companion
+  // damage) so they're TODO.
+}
+
+/** A1 RES shred on enemy: -15% geo RES while Lumi is out;
+ *  additional -15% under 月兆·满辉 condition.
+ *  Returns the AMOUNT to subtract from enemy.preRes.geo. */
+export function linneaA1GeoResShred(
+  scope: import('../scope').Scope,
+  condState: Record<string, Record<string, number>>,
+): number {
+  const ascension = scope.get('ascension') ?? 0
+  if (ascension < 1) return 0
+  let shred = 0
+  if (condState.Linnea?.lumiActive) shred += 0.15
+  if (condState.Linnea?.moonFull) shred += 0.15
+  return shred
 }
 
 // Re-suppress unused-var while sum is imported for parity with other formula files.

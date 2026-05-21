@@ -25,7 +25,7 @@ import { goCharacterKey, goWeaponKey, goArtifactSetKey } from '@/integration/goo
 import { characterSheets, weaponSheets, artifactSetSheets } from './sheets'
 import type { CondState } from './sheet-types'
 import { ShenheFormulas, applyShenheFormulaBuffs, shenheQResShred } from './sheets/Shenhe-formulas'
-import { LinneaFormulas, applyLinneaFormulaBuffs } from './sheets/Linnea-formulas'
+import { LinneaFormulas, applyLinneaFormulaBuffs, linneaA1GeoResShred } from './sheets/Linnea-formulas'
 import { evaluateFormula, type FormulaDef, type FormulaResult, type EnemyContext } from './formula'
 import { CHARACTER_NAME_ZH, WEAPON_NAME_ZH } from './data/names-zh'
 
@@ -414,18 +414,32 @@ export function buildCharacter(
     goCharKey === 'Linnea' ? LinneaFormulas :
     []
   if (formulaDefs.length) {
-    // Apply Q-field RES shred (cryo + phys) to enemy context, if any.
-    const resShred = goCharKey === 'Shenhe' ? shenheQResShred(scope, condState) : 0
-    const enemyForEval: EnemyContext = resShred > 0
-      ? {
+    // Enemy debuff layer — each character can shred specific elements.
+    let enemyForEval: EnemyContext = enemy
+    if (goCharKey === 'Shenhe') {
+      const r = shenheQResShred(scope, condState)
+      if (r > 0) {
+        enemyForEval = {
           ...enemy,
           preRes: {
             ...enemy.preRes,
-            cryo: (enemy.preRes?.cryo ?? 0.1) - resShred,
-            physical: (enemy.preRes?.physical ?? 0.1) - resShred,
+            cryo: (enemy.preRes?.cryo ?? 0.1) - r,
+            physical: (enemy.preRes?.physical ?? 0.1) - r,
           },
         }
-      : enemy
+      }
+    } else if (goCharKey === 'Linnea') {
+      const r = linneaA1GeoResShred(scope, condState)
+      if (r > 0) {
+        enemyForEval = {
+          ...enemy,
+          preRes: {
+            ...enemy.preRes,
+            geo: (enemy.preRes?.geo ?? 0.1) - r,
+          },
+        }
+      }
+    }
     for (const def of formulaDefs) {
       formulas.push(
         evaluateFormula(def, {

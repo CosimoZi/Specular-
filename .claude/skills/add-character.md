@@ -23,11 +23,21 @@ Read `src/integration/go-id-map.json`. The arg should be a value in `map.charact
 
 ### 1. Read source data
 
-- `src/data/raw/characters.json[id]` → `name` (canonical zh), `element`, `weaponType`, `rarity`. Use this for sanity-checking the GO-side data.
-- `src/data/raw/characters.json[id].talent` and `.passive` and `.constellation` if present — these contain wiki-style effect descriptions in Chinese, useful for the checklist.
-- `vendor/go/gi/stats/src/allStat_gen.json`:
-  - `char.data.<key>` for `lvlCurves`, `ascensionBonus`, `ele`, `weaponType`
-  - `char.skillParam.<key>` for the talent multiplier arrays: `auto`, `skill`, `burst`, `passive1`, `passive2`, `passive3`, `constellation1..6`
+Run `python scripts/dump-char.py <GoKey>` first. It prints:
+- canonical zh name
+- ele / weaponType / rarity
+- lvlCurves + ascensionBonus
+- skillParam shape for every category (auto/skill/burst/passive1..3/constellation1..6) with lv1/10/15 sample values
+- raw.talent[*] descriptions (普攻 / E / Q + ascension passives A1/A4/A6)
+- raw.constellation[*] descriptions (C1..C6)
+
+**The talent descriptions are the AUTHORITATIVE source for scaling stat**. Read them carefully:
+- Phrases like `"基于HP上限的X%"`、`"防御力的Y%"`、`"攻击力的Z%"`、`"元素精通的W%"` tell you which stat scales which skill/buff
+- Phrases like `"X元素抗性 -Y%"` are enemy debuffs (go to enemy layer, not character buffs)
+- Phrases like `"队伍中所有角色"` are team buffs (cross-character propagation)
+- Phrases mentioning `"月反应"`、`"月感电"`、`"月绽放"`、`"月结晶"` mean the character is moon-reaction-based — invoke the `anthropic-skills:lunar-reaction-artifact-analysis` skill to learn the moon-reaction formula (special crit + reaction-boost mechanic) before modeling damage.
+
+If still unsure about scaling stat for a specific formula, leave a TODO and ask the user.
 
 ### 2. Generate `src/calc/sheets/<GoKey>.ts`
 
@@ -68,12 +78,20 @@ The 13 damage formulas. Element rules per `weaponType`:
 | bow     | physical | char-element (aimed) | physical | char-element |
 | catalyst | char-element | char-element | physical | char-element |
 
-Scaling stat — default `final.atk`. Exceptions (read wiki / talent description):
-- HP scaling: HuTao, Zhongli, Yelan, Nilou, KamisatoAyato (his skill scales HP via 4pc), HuTao (her E gives HP-based ATK)
-- DEF scaling: AratakiItto, NobleeAlbedo (transient sword formula), Gorou
-- EM scaling: weapon's-passive territory (see Staff of Scarlet Sands), not the formula itself.
+Scaling stat — default `final.atk`. **READ THE TALENT DESCRIPTION** to confirm; don't guess by character name. The text explicitly states scaling stat: `"基于HP上限的X%"`、`"防御力的Y%"`、`"攻击力的Z%"`. Examples:
+- HP scaling: HuTao (skill ATK from HP), Zhongli (shield from HP), Yelan (burst), Nilou (bloom), KamisatoAyato
+- DEF scaling: AratakiItto, Albedo (transient sword), Gorou, **Linnea (Lumi + 月结晶)**, Noelle
+- EM scaling: usually weapon territory, not formula scaling
 
-When unsure, default to ATK and leave a TODO comment.
+For Lumi-style "companion damage" (Linnea, Albedo skill 阳华, Itto Ushi), the companion's hits are scaled by the parent character's stat, not the active character's. Use `final.<stat>` of the SOURCE character.
+
+When the description text uses multiple stats (e.g. "Y%×ATK + Z×HP"), break into separate sum terms. When unsure or the text is ambiguous, leave `TODO: verify scaling` comment and ask user.
+
+**Moon reactions (月反应)**: if you see `"月感电"`、`"月绽放"`、`"月结晶"` in passives/constellations:
+1. Invoke `anthropic-skills:lunar-reaction-artifact-analysis` skill to load the formula reference
+2. Moon reactions have two forms: 反应月反应 (no HP/ATK, like superconduct but with crits + reaction-boost), 直伤月反应 (HP/ATK/DEF × multiplier × reaction coefficient 3)
+3. Reaction-boost is independent additive term in `(1 + 精通增益 + 反应提升)` — NOT a separate multiplier
+4. We don't yet have a 月反应 layer in src/calc/formula.ts. Flag this as needs-engine-extension and leave the moon-reaction damage formulas as TODO.
 
 Hit-array indexing (most polearm/sword/claymore):
 - `auto[0..2]` → N1..N3
@@ -157,6 +175,11 @@ Print a Chinese checklist for the user / me to fill, structured as:
 - **Fail-fast scope reads**: declare all `cond.<sheet>.<name>` reads with explicit default `0` (via `v('name', 0)`). The AST throws on missing vars.
 - **Icy-Quill pattern**: if the character has a "flat add to base damage for element X", wrap it with `when(ne(v('cond.<sheet>.<flag>', 0), 0), prod(v('final.atk'), lookup(coeffTable, 'talent.x')), 0)` and sum into the formula's base.
 - **C2 conds** that share a trigger with A1 (e.g. Shenhe burstField): use ONE cond name and gate by constellation level with `cmpGE`.
+- **burst[0] sanity check**: if `burst[0]` at lv1 is much larger than ~5 (typical multiplier range 0.5-3.0), it's probably a **heal flat-amount**, not a damage multiplier. The burst is a heal — skip the damage formula for it. Verify with the talent text: `"恢复生命值"` confirms heal.
+- **passive2 = A1 (ascension 1+), passive3 = A4 (ascension 4+), passive1 = A6 (ascension 6+)** — yes the GO indexing is unintuitive. Check by reading the description text in raw.talent vs the numeric coefficients in skillParam.passive*.
+- **Companion damage (Lumi/阳华/Ushi)** scales with the PARENT character's stat, not the active character's. We don't have a companion-formula layer yet; leave as TODO until added.
+- **Enemy RES debuffs** (`"X元素抗性 -Y%"`): these belong to the enemy debuff layer, not character buffs. See `shenheQResShred` in Shenhe-formulas.ts for the pattern. They flow into `EnemyContext.preRes` at formula-eval time.
+- **DEF default to max stacks when off-field**: weapons like CalamityQueller default to max stack count when off-field (matching the "swap out after stacking" rotation). On-field also defaults to max (only the multiplier differs). User can dial down via cond input.
 
 ## Done condition
 
