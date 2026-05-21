@@ -25,7 +25,8 @@ export const CalamityQueller: WeaponSheet = {
     if (r < 1 || r > 5) return
     // Passive 1: permanent +X% all-ele dmg.
     const dmgBonus = DMG_BONUS[r]!
-    for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, dmgBonus)
+    const passive1Src = `破魔之弓 被动 R${r}(全元素伤害)`
+    for (const ele of ALL_ELEMENTS) scope.add(`premod.dmg_.${ele}`, dmgBonus, passive1Src)
 
     // Passive 2: stack ATK%, doubled when off-field.
     const stacks = condState.CalamityQueller?.stack ?? 0
@@ -33,6 +34,11 @@ export const CalamityQueller: WeaponSheet = {
     const onField = (condState.CalamityQueller?.isActive ?? 0) !== 0
     const mult = onField ? 1 : 2
     const atkPctPerStack = ATK_PER_STACK[r]!
-    scope.add('weap.passive.atk_', stacks * atkPctPerStack * mult)
+    const total = stacks * atkPctPerStack * mult
+    scope.add(
+      'weap.passive.atk_',
+      total,
+      `破魔之弓 被动 R${r}(${stacks} 层 × ${(atkPctPerStack * mult * 100).toFixed(1)}%${onField ? '' : ' ×2 不在场'})`,
+    )
   },
 }

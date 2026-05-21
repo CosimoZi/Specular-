@@ -736,6 +736,108 @@ function FinalStat({ label, value }: { label: string; value: string }) {
   )
 }
 
+type ContribKind = 'base' | 'pct' | 'flat' | 'pure'
+
+function BreakdownTable({
+  statName,
+  finalValue,
+  rows,
+  label,
+}: {
+  statName: string
+  finalValue: number
+  label: string
+  rows: Array<{ source: string; value: number; kind: ContribKind }>
+}) {
+  const isPercentDisplay = statName.endsWith('_')
+  const formatVal = (v: number, kind: ContribKind) => {
+    if (kind === 'pct' || kind === 'pure') {
+      // % stats display as percentage
+      if (isPercentDisplay || kind === 'pct') return `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`
+      // pure stat with non-% display (eleMas) — show raw
+      return `${v >= 0 ? '+' : ''}${v.toFixed(1)}`
+    }
+    return `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString()}`
+  }
+  // Group rows by kind. For HP/ATK/DEF show the base + pct + flat breakdown
+  // separately; for pure stats just show a single list.
+  const grouped: Record<ContribKind, typeof rows> = { base: [], pct: [], flat: [], pure: [] }
+  for (const r of rows) (grouped[r.kind] as typeof rows).push(r)
+
+  const isComposite = statName === 'hp' || statName === 'atk' || statName === 'def'
+  const baseSum = grouped.base.reduce((s, r) => s + r.value, 0)
+  const pctSum = grouped.pct.reduce((s, r) => s + r.value, 0)
+  const flatSum = grouped.flat.reduce((s, r) => s + r.value, 0)
+
+  return (
+    <div className="px-4 pt-1 pb-4 bg-zinc-50/40 dark:bg-zinc-900/40 text-xs">
+      <div className="text-zinc-500 mb-2">
+        {label} 的组成 · 最终值 <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+          {isPercentDisplay ? `${(finalValue * 100).toFixed(1)}%` : Math.round(finalValue).toLocaleString()}
+        </span>
+      </div>
+      {isComposite ? (
+        <div className="space-y-3">
+          {grouped.base.length > 0 && (
+            <BreakdownGroup
+              title={`基础区合计 ${Math.round(baseSum).toLocaleString()}`}
+              rows={grouped.base}
+              formatVal={formatVal}
+            />
+          )}
+          {grouped.pct.length > 0 && (
+            <BreakdownGroup
+              title={`百分比加成合计 +${(pctSum * 100).toFixed(1)}%`}
+              rows={grouped.pct}
+              formatVal={formatVal}
+            />
+          )}
+          {grouped.flat.length > 0 && (
+            <BreakdownGroup
+              title={`固定加成合计 +${Math.round(flatSum).toLocaleString()}`}
+              rows={grouped.flat}
+              formatVal={formatVal}
+            />
+          )}
+          {/* Show the assembly formula at the bottom. */}
+          <div className="text-zinc-500 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
+            {`(${Math.round(baseSum).toLocaleString()} × (1 + ${(pctSum * 100).toFixed(1)}%) + ${Math.round(flatSum).toLocaleString()}) = ${Math.round(finalValue).toLocaleString()}`}
+          </div>
+        </div>
+      ) : (
+        <BreakdownGroup rows={rows} formatVal={formatVal} />
+      )}
+      {rows.length === 0 && (
+        <div className="text-zinc-400 italic">没有可显示的来源(没有任何加成项)。</div>
+      )}
+    </div>
+  )
+}
+
+function BreakdownGroup({
+  title,
+  rows,
+  formatVal,
+}: {
+  title?: string
+  rows: Array<{ source: string; value: number; kind: ContribKind }>
+  formatVal: (v: number, kind: ContribKind) => string
+}) {
+  return (
+    <div>
+      {title && <div className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">{title}</div>}
+      <ul className="space-y-0.5">
+        {rows.map((r, i) => (
+          <li key={i} className="flex items-baseline gap-3">
+            <span className="text-zinc-600 dark:text-zinc-400 flex-1 truncate">{r.source}</span>
+            <span className="tabular-nums text-zinc-800 dark:text-zinc-200">{formatVal(r.value, r.kind)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // ============================================================================
 // Output panels — focus-character stats + per-talent damage + substat margins
 // ============================================================================
@@ -850,16 +952,23 @@ function GoPandoPanel({
       return next
     })
 
-  const panelEntries: Array<{ name: string; value: number }> = []
+  type PanelEntry = { name: string; value: number; contributors?: Array<{ source: string; value: number; kind: 'base' | 'pct' | 'flat' | 'pure' }> }
+  const panelEntries: PanelEntry[] = []
   const byMove: Record<string, GoComputeResult['formulas']> = {}
   for (const f of result.formulas) {
     if (f.move === 'panel') {
-      panelEntries.push({ name: f.name, value: f.value })
+      panelEntries.push({
+        name: f.name,
+        value: f.value,
+        contributors: (f as unknown as { contributors?: PanelEntry['contributors'] }).contributors,
+      })
     } else {
       ;(byMove[f.move] ||= []).push(f)
     }
   }
   panelEntries.sort((a, b) => panelOrderIdx(a.name) - panelOrderIdx(b.name))
+  const [expandedStat, setExpandedStat] = useState<string | null>(null)
+  const expandedEntry = expandedStat ? panelEntries.find((p) => p.name === expandedStat) ?? null : null
 
   return (
     <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
@@ -870,16 +979,42 @@ function GoPandoPanel({
           {result.fed.weapon ? '✓ ' + t('damage.fedWeapon') : '— ' + t('damage.noWeapon')} · {result.fed.artifacts}/5 {t('damage.fedArtifacts')}
         </span>
       </h3>
-      {/* Panel stats */}
-      <div className="px-4 py-3 grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm bg-zinc-50/40 dark:bg-zinc-900/40 border-b border-zinc-100 dark:border-zinc-800">
-        {panelEntries.map(({ name, value }) => (
-          <FinalStat
-            key={name}
-            label={panelLabel(name, t)}
-            value={formatPanelValue(name, value)}
-          />
-        ))}
+      {/* Panel stats — each is clickable to reveal its source breakdown. */}
+      <div className="px-4 pt-3 pb-2 grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm bg-zinc-50/40 dark:bg-zinc-900/40">
+        {panelEntries.map(({ name, value, contributors }) => {
+          const isExpanded = expandedStat === name
+          const hasBreakdown = !!contributors && contributors.length > 0
+          return (
+            <button
+              key={name}
+              onClick={() => setExpandedStat(isExpanded ? null : name)}
+              disabled={!hasBreakdown}
+              className={`text-left rounded px-2 py-1 transition-colors ${
+                hasBreakdown
+                  ? `hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer ${
+                      isExpanded ? 'bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700' : ''
+                    }`
+                  : 'cursor-default'
+              }`}
+            >
+              <FinalStat
+                label={panelLabel(name, t)}
+                value={formatPanelValue(name, value)}
+              />
+            </button>
+          )
+        })}
       </div>
+      {/* Breakdown panel for the expanded stat */}
+      {expandedEntry && expandedEntry.contributors && (
+        <BreakdownTable
+          statName={expandedEntry.name}
+          finalValue={expandedEntry.value}
+          rows={expandedEntry.contributors}
+          label={panelLabel(expandedEntry.name, t)}
+        />
+      )}
+      <div className="border-b border-zinc-100 dark:border-zinc-800" />
       {/* Per-move damage groups */}
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
         {MOVE_GROUP_ORDER.map(({ key, labelKey }) => {

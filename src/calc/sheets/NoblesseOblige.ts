@@ -11,12 +11,10 @@ export const NoblesseOblige: ArtifactSetSheet = {
   ],
   apply(scope, count, condState) {
     if (count >= 2) {
-      scope.add('premod.dmg_.burst', 0.2)
+      scope.add('premod.dmg_.burst', 0.2, '昔日宗室之仪 2 件套')
     }
     if (count >= 4 && condState.NoblesseOblige?.set4) {
-      // Team-wide buff. For now, the wielder also picks it up via their own
-      // scope. Cross-character propagation comes when the team pipeline lands.
-      scope.add('artifact.set.atk_', 0.2)
+      scope.add('artifact.set.atk_', 0.2, '昔日宗室之仪 4 件套(Q 后)')
     }
   },
 }

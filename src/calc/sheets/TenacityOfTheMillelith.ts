@@ -11,11 +11,11 @@ export const TenacityOfTheMillelith: ArtifactSetSheet = {
   ],
   apply(scope, count, condState) {
     if (count >= 2) {
-      scope.add('premod.hp_', 0.2)
+      scope.add('premod.hp_', 0.2, '千岩牢固 2 件套')
     }
     if (count >= 4 && condState.TenacityOfTheMillelith?.set4) {
-      scope.add('artifact.set.atk_', 0.2)
-      scope.add('premod.shield_', 0.3)
+      scope.add('artifact.set.atk_', 0.2, '千岩牢固 4 件套(E 命中后)')
+      scope.add('premod.shield_', 0.3, '千岩牢固 4 件套(护盾强效)')
     }
   },
 }

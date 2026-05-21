@@ -34,6 +34,25 @@ export interface BuildResult {
   /** Damage formulas — present only when the character sheet has formulas
    *  wired (Shenhe today). */
   formulas: FormulaResult[]
+  /** Per-panel-stat breakdown for the UI to render on click. Keyed by the
+   *  same name the panel uses ('atk', 'hp', 'def', 'cryo_dmg_', etc.). */
+  contributions: Record<string, ContribRow[]>
+}
+
+/** One row in a stat's breakdown. */
+export interface ContribRow {
+  /** Where the contribution came from, in Chinese (UI-ready). */
+  source: string
+  /** The raw delta this source added. For percent stats this is a decimal
+   *  (0.466 = +46.6%). For flat stats it's the absolute value. */
+  value: number
+  /** Which bucket the value lives in.
+   *    'base'   — adds to the base zone (char/weapon stats, no % multiplier)
+   *    'pct'    — adds to the %-multiplier
+   *    'flat'   — flat addition outside the % multiplier
+   *    'pure'   — single-bucket stat (CR, CD, dmg_<ele>, etc.); just sum
+   */
+  kind: 'base' | 'pct' | 'flat' | 'pure'
 }
 
 export interface PanelStats {
@@ -166,12 +185,14 @@ export function buildCharacter(
     const mainGoKey = MAIN_STAT_TO_GO[piece.mainStat]
     if (mainGoKey) {
       const mainVal = mainStatMaxValueL20(slot as ArtifactSlot, mainGoKey)
-      if (mainVal !== undefined) scope.add(`artifact.main.${mainGoKey}`, mainVal)
+      if (mainVal !== undefined) {
+        scope.add(`artifact.main.${mainGoKey}`, mainVal, `${SLOT_LABEL[slot]}主词条`)
+      }
     }
     for (const s of piece.substats) {
       const goKey = SUB_KEY_TO_GO[s.key]
       if (!goKey) continue
-      scope.add(`artifact.sub.${goKey}`, s.value)
+      scope.add(`artifact.sub.${goKey}`, s.value, `${SLOT_LABEL[slot]}副词条`)
     }
   }
   for (const [setKey, count] of Object.entries(setCount)) {
@@ -404,9 +425,13 @@ export function buildCharacter(
     }
   }
 
+  // ---- Assemble per-stat breakdown for UI ----
+  const contributions = assembleContributions(scope, goCharKey, weaponGoKey)
+
   return {
     scope,
     formulas,
+    contributions,
     panel: {
       baseHp: scope.get('base.hp')!,
       baseAtk: scope.get('base.atk')!,
@@ -457,6 +482,145 @@ function isCondStateOnly(x: unknown): boolean {
   const keys = Object.keys(x as object)
   if (keys.length === 0) return false
   return !keys.includes('condState') && !keys.includes('enemy')
+}
+
+const SLOT_LABEL: Record<string, string> = {
+  flower: '生之花', plume: '死之羽', sands: '时之沙', goblet: '空之杯', circlet: '理之冠',
+}
+
+/** Build the breakdown map for every panel stat the UI shows. Pulls from
+ *  scope's recorded contributions (via `scope.contributionsFor(key)`) PLUS
+ *  the singleton-set slots that the build pipeline writes directly. */
+function assembleContributions(
+  scope: Scope,
+  charKey: string,
+  weaponKey: string | null,
+): Record<string, ContribRow[]> {
+  const charName = charKey
+  const weaponName = weaponKey ?? '武器'
+  const nz = (v: number | undefined) => v !== undefined && v !== 0
+  const out: Record<string, ContribRow[]> = {}
+
+  // ---- ATK ----
+  const atkRows: ContribRow[] = []
+  // Base zone (char + weapon, summed before %)
+  if (nz(scope.get('char.curve.atk'))) {
+    atkRows.push({ source: `${charName} 基础攻击力曲线`, value: scope.get('char.curve.atk')!, kind: 'base' })
+  }
+  if (nz(scope.get('char.asc.atk'))) {
+    atkRows.push({ source: `${charName} 突破固定攻击力`, value: scope.get('char.asc.atk')!, kind: 'base' })
+  }
+  if (nz(scope.get('weap.curve.atk'))) {
+    atkRows.push({ source: `${weaponName} 武器白值`, value: scope.get('weap.curve.atk')!, kind: 'base' })
+  }
+  if (nz(scope.get('weap.asc.atk'))) {
+    atkRows.push({ source: `${weaponName} 突破固定攻击力`, value: scope.get('weap.asc.atk')!, kind: 'base' })
+  }
+  // %-sources
+  if (nz(scope.get('char.asc.atk_'))) {
+    atkRows.push({ source: `${charName} 突破百分比攻击力`, value: scope.get('char.asc.atk_')!, kind: 'pct' })
+  }
+  if (nz(scope.get('weap.substat.atk_'))) {
+    atkRows.push({ source: `${weaponName} 副词条 攻击力 %`, value: scope.get('weap.substat.atk_')!, kind: 'pct' })
+  }
+  if (nz(scope.get('weap.asc.atk_'))) {
+    atkRows.push({ source: `${weaponName} 突破百分比攻击力`, value: scope.get('weap.asc.atk_')!, kind: 'pct' })
+  }
+  for (const c of scope.contributionsFor('weap.passive.atk_')) atkRows.push({ ...c, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.main.atk_')) atkRows.push({ source: `${c.source} 攻击力 %`, value: c.value, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.sub.atk_')) atkRows.push({ source: `${c.source} 攻击力 %`, value: c.value, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.set.atk_')) atkRows.push({ ...c, kind: 'pct' })
+  // Flat sources (plume main + atkFlat subs)
+  for (const c of scope.contributionsFor('artifact.main.atk')) atkRows.push({ source: `${c.source} 固定攻击力`, value: c.value, kind: 'flat' })
+  for (const c of scope.contributionsFor('artifact.sub.atk')) atkRows.push({ source: `${c.source} 固定攻击力`, value: c.value, kind: 'flat' })
+  out.atk = atkRows
+
+  // ---- HP ----
+  const hpRows: ContribRow[] = []
+  if (nz(scope.get('char.curve.hp'))) {
+    hpRows.push({ source: `${charName} 基础生命值曲线`, value: scope.get('char.curve.hp')!, kind: 'base' })
+  }
+  if (nz(scope.get('char.asc.hp'))) {
+    hpRows.push({ source: `${charName} 突破固定生命值`, value: scope.get('char.asc.hp')!, kind: 'base' })
+  }
+  if (nz(scope.get('char.asc.hp_'))) {
+    hpRows.push({ source: `${charName} 突破百分比生命值`, value: scope.get('char.asc.hp_')!, kind: 'pct' })
+  }
+  if (nz(scope.get('weap.substat.hp_'))) {
+    hpRows.push({ source: `${weaponName} 副词条 生命值 %`, value: scope.get('weap.substat.hp_')!, kind: 'pct' })
+  }
+  for (const c of scope.contributionsFor('artifact.main.hp_')) hpRows.push({ source: `${c.source} 生命值 %`, value: c.value, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.sub.hp_')) hpRows.push({ source: `${c.source} 生命值 %`, value: c.value, kind: 'pct' })
+  for (const c of scope.contributionsFor('premod.hp_')) hpRows.push({ ...c, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.main.hp')) hpRows.push({ source: `${c.source} 固定生命值`, value: c.value, kind: 'flat' })
+  for (const c of scope.contributionsFor('artifact.sub.hp')) hpRows.push({ source: `${c.source} 固定生命值`, value: c.value, kind: 'flat' })
+  out.hp = hpRows
+
+  // ---- DEF ----
+  const defRows: ContribRow[] = []
+  if (nz(scope.get('char.curve.def'))) {
+    defRows.push({ source: `${charName} 基础防御力曲线`, value: scope.get('char.curve.def')!, kind: 'base' })
+  }
+  if (nz(scope.get('char.asc.def'))) {
+    defRows.push({ source: `${charName} 突破固定防御力`, value: scope.get('char.asc.def')!, kind: 'base' })
+  }
+  if (nz(scope.get('char.asc.def_'))) {
+    defRows.push({ source: `${charName} 突破百分比防御力`, value: scope.get('char.asc.def_')!, kind: 'pct' })
+  }
+  if (nz(scope.get('weap.substat.def_'))) {
+    defRows.push({ source: `${weaponName} 副词条 防御力 %`, value: scope.get('weap.substat.def_')!, kind: 'pct' })
+  }
+  for (const c of scope.contributionsFor('artifact.main.def_')) defRows.push({ source: `${c.source} 防御力 %`, value: c.value, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.sub.def_')) defRows.push({ source: `${c.source} 防御力 %`, value: c.value, kind: 'pct' })
+  for (const c of scope.contributionsFor('artifact.sub.def')) defRows.push({ source: `${c.source} 固定防御力`, value: c.value, kind: 'flat' })
+  out.def = defRows
+
+  // ---- "Pure" stats — single bucket, no base/% split ----
+  const pureStat = (
+    key: string,
+    label: string,
+    baseFromChar = false,
+  ): ContribRow[] => {
+    const rows: ContribRow[] = []
+    if (baseFromChar) {
+      // CR / CD have a fixed base (5% / 50%) baked into the formula.
+      rows.push({ source: `角色基础 ${label}`, value: key === 'cappedCritRate_' ? 0.05 : 0.5, kind: 'pure' })
+    }
+    if (nz(scope.get(`char.asc.${key}`))) rows.push({ source: `${charName} 突破 ${label}`, value: scope.get(`char.asc.${key}`)!, kind: 'pure' })
+    if (nz(scope.get(`weap.substat.${key}`))) rows.push({ source: `${weaponName} 副词条 ${label}`, value: scope.get(`weap.substat.${key}`)!, kind: 'pure' })
+    for (const c of scope.contributionsFor(`artifact.main.${key}`)) rows.push({ source: `${c.source} ${label}`, value: c.value, kind: 'pure' })
+    for (const c of scope.contributionsFor(`artifact.sub.${key}`)) rows.push({ source: `${c.source} ${label}`, value: c.value, kind: 'pure' })
+    for (const c of scope.contributionsFor(`premod.${key}`)) rows.push({ ...c, kind: 'pure' })
+    return rows
+  }
+
+  out.eleMas = pureStat('eleMas', '元素精通')
+  // ER has a hidden +1.0 baseline.
+  const erRows = pureStat('enerRech_', '元素充能效率')
+  erRows.unshift({ source: '角色基础充能效率', value: 1, kind: 'pure' })
+  out.enerRech_ = erRows
+  out.cappedCritRate_ = pureStat('critRate_', '暴击率', /*baseFromChar*/ true)
+  out.critDMG_ = pureStat('critDMG_', '暴击伤害', /*baseFromChar*/ true)
+  out.heal_ = pureStat('heal_', '治疗加成')
+
+  // Per-element DMG bonus (only the ones we actually display in panel; the
+  // adapter filters down to char's own element + physical).
+  const ELE_KEYS = ['pyro', 'hydro', 'cryo', 'electro', 'anemo', 'geo', 'dendro', 'physical'] as const
+  for (const ele of ELE_KEYS) {
+    const eleZh = ELEMENT_LABEL_ZH[ele]
+    const rows: ContribRow[] = []
+    for (const c of scope.contributionsFor(`artifact.main.${ele}_dmg_`)) rows.push({ source: `${c.source} ${eleZh}元素伤害`, value: c.value, kind: 'pure' })
+    for (const c of scope.contributionsFor(`artifact.sub.${ele}_dmg_`)) rows.push({ source: `${c.source} ${eleZh}元素伤害`, value: c.value, kind: 'pure' })
+    for (const c of scope.contributionsFor(`premod.dmg_.${ele}`)) rows.push({ ...c, kind: 'pure' })
+    out[`${ele}_dmg_`] = rows
+  }
+
+  return out
+}
+
+const ELEMENT_LABEL_ZH: Record<string, string> = {
+  pyro: '火', hydro: '水', cryo: '冰', electro: '雷',
+  anemo: '风', geo: '岩', dendro: '草', physical: '物',
 }
 
 const MAIN_STAT_TO_GO: Record<string, string> = {

@@ -7,8 +7,23 @@
 //
 // Keep this simple. Map<string, number>. No reactive bullshit, no proxy magic.
 
+/** One source's contribution to a stat slot. */
+export interface Contribution {
+  /** Human-readable source label (Chinese; matches the i18n style of the
+   *  rest of the UI). */
+  source: string
+  /** The delta this source added to the slot. Sign-preserving. */
+  value: number
+}
+
 export class Scope {
   private vals: Map<string, number>
+  /** Per-slot list of contributions accumulated via `add()` / `setLabelled()`.
+   *  Only populated when callers pass a `source`; `add()` without a source
+   *  still mutates `vals` but doesn't record. Singleton stats set once via
+   *  `set()` aren't recorded — the build pipeline assembles their breakdown
+   *  rows directly from the well-known slot keys. */
+  private contribs: Map<string, Contribution[]> = new Map()
   readonly parent?: Scope
 
   constructor(parent?: Scope, init?: Record<string, number>) {
@@ -22,8 +37,6 @@ export class Scope {
     return this.parent?.get(name)
   }
 
-  /** Like get(), but returns the default if unbound. Used in the AST evaluator
-   *  for `var` nodes with a `default` field. */
   getOr(name: string, fallback: number): number {
     return this.get(name) ?? fallback
   }
@@ -32,27 +45,35 @@ export class Scope {
     this.vals.set(name, value)
   }
 
-  /** Sum into a slot. Used by buff accumulation:
-   *    scope.add('premod.atk_', 0.165)  // CQ R1 substat
-   *    scope.add('premod.atk_', 0.288)  // Shenhe A6 ascension
-   *  After both, scope.get('premod.atk_') === 0.453. */
-  add(name: string, delta: number): void {
+  /** Sum into a slot. If `source` is given, also records the delta with its
+   *  source label so the UI can render a per-source breakdown. */
+  add(name: string, delta: number, source?: string): void {
     const cur = this.get(name) ?? 0
     this.vals.set(name, cur + delta)
+    if (source !== undefined && delta !== 0) {
+      const list = this.contribs.get(name) ?? []
+      list.push({ source, value: delta })
+      this.contribs.set(name, list)
+    }
   }
 
-  /** Replace a slot with the max of current and incoming. Used for non-stacking
-   *  buffs (only the strongest source wins). */
   setMax(name: string, value: number): void {
     const cur = this.get(name) ?? -Infinity
     this.vals.set(name, Math.max(cur, value))
+  }
+
+  /** All contributions for a slot, walking parent chain. Parent-recorded rows
+   *  come first. */
+  contributionsFor(name: string): Contribution[] {
+    const parent = this.parent?.contributionsFor(name) ?? []
+    const local = this.contribs.get(name) ?? []
+    return [...parent, ...local]
   }
 
   child(init?: Record<string, number>): Scope {
     return new Scope(this, init)
   }
 
-  /** Snapshot — flatten parent chain into a plain object. For debug / UI display. */
   snapshot(): Record<string, number> {
     const out: Record<string, number> = {}
     if (this.parent) Object.assign(out, this.parent.snapshot())
@@ -60,7 +81,6 @@ export class Scope {
     return out
   }
 
-  /** Just the keys this scope (or its parents) has bound. */
   keys(): Set<string> {
     const ks = new Set<string>()
     if (this.parent) for (const k of this.parent.keys()) ks.add(k)

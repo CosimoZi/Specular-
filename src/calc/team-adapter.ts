@@ -30,6 +30,14 @@ export interface ComputedFormula {
   move: 'normal' | 'charged' | 'plunging' | 'skill' | 'burst' | 'panel' | 'reaction' | 'other'
   ele?: string
   reaction?: string
+  /** Per-source contribution rows, attached to panel entries only. */
+  contributors?: PanelContribution[]
+}
+
+export interface PanelContribution {
+  source: string
+  value: number
+  kind: 'base' | 'pct' | 'flat' | 'pure'
 }
 
 export interface ComputeResult {
@@ -121,24 +129,36 @@ export function computeTeamNew(
   for (const f of r.formulas) values[f.name] = f.value
 
   // Panel formula entries — the UI's FocusDamagePanel groups any `move:'panel'`
-  // entries into a header row above the damage groups.
+  // entries into a header row above the damage groups. Each panel entry
+  // carries its per-source breakdown via `contributors`.
+  const ct = (key: string) => r.contributions[key] ?? []
   const panel: ComputedFormula[] = [
-    { name: 'hp', value: r.panel.finalHp, move: 'panel' },
-    { name: 'atk', value: r.panel.finalAtk, move: 'panel' },
-    { name: 'def', value: r.panel.finalDef, move: 'panel' },
-    { name: 'eleMas', value: r.panel.eleMas, move: 'panel' },
-    { name: 'enerRech_', value: r.panel.enerRech_, move: 'panel' },
-    { name: 'cappedCritRate_', value: r.panel.cappedCritRate_, move: 'panel' },
-    { name: 'critDMG_', value: r.panel.critDMG_, move: 'panel' },
+    { name: 'hp', value: r.panel.finalHp, move: 'panel', contributors: ct('hp') },
+    { name: 'atk', value: r.panel.finalAtk, move: 'panel', contributors: ct('atk') },
+    { name: 'def', value: r.panel.finalDef, move: 'panel', contributors: ct('def') },
+    { name: 'eleMas', value: r.panel.eleMas, move: 'panel', contributors: ct('eleMas') },
+    { name: 'enerRech_', value: r.panel.enerRech_, move: 'panel', contributors: ct('enerRech_') },
+    { name: 'cappedCritRate_', value: r.panel.cappedCritRate_, move: 'panel', contributors: ct('cappedCritRate_') },
+    { name: 'critDMG_', value: r.panel.critDMG_, move: 'panel', contributors: ct('critDMG_') },
   ]
-  // DMG bonus — only the character's own element. (Showing all 8 was noisy and
-  // mostly irrelevant: e.g. a polearm cryo character cares about cryo + maybe
-  // physical, not pyro/hydro/etc.) Physical is included when it's non-zero —
-  // for polearm/sword/claymore/bow characters whose normals are physical.
+  // DMG bonus — only the character's own element (+ physical if non-zero, for
+  // polearm/sword/claymore/bow characters whose normals are physical).
   const charEle = charDataRaw(goCharKey).ele as keyof typeof r.panel.dmg_
-  panel.push({ name: `${charEle}_dmg_`, value: r.panel.dmg_[charEle], move: 'panel', ele: charEle })
+  panel.push({
+    name: `${charEle}_dmg_`,
+    value: r.panel.dmg_[charEle],
+    move: 'panel',
+    ele: charEle,
+    contributors: ct(`${charEle}_dmg_`),
+  })
   if (charEle !== 'physical' && r.panel.dmg_.physical > 0) {
-    panel.push({ name: 'physical_dmg_', value: r.panel.dmg_.physical, move: 'panel', ele: 'physical' })
+    panel.push({
+      name: 'physical_dmg_',
+      value: r.panel.dmg_.physical,
+      move: 'panel',
+      ele: 'physical',
+      contributors: ct('physical_dmg_'),
+    })
   }
 
   const damage: ComputedFormula[] = r.formulas.map((f) => ({
