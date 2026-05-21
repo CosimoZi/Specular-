@@ -29,7 +29,7 @@ import {
   type Position,
 } from '@/engine/buff-zones'
 import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
-import { computeViaGo } from '@/integration/go-calc'
+import type { GoComputeResult } from '@/integration/go-calc'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
@@ -142,11 +142,20 @@ export default function Team() {
   const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
   const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
 
-  // GO Pando — compute via vendored GenshinOptimizer engine. Returns null if
-  // character isn't in GO's sheets (newer 5.x characters may not be yet).
-  const goResult = useMemo(() => {
-    if (!focusConfig) return null
-    return computeViaGo(focusConfig)
+  // GO Pando — compute via vendored GenshinOptimizer engine. Dynamic import
+  // so the ~230 KB gzip GO chunk only loads when user visits /team.
+  const [goResult, setGoResult] = useState<GoComputeResult | null>(null)
+  useEffect(() => {
+    if (!focusConfig) {
+      setGoResult(null)
+      return
+    }
+    let cancelled = false
+    import('@/integration/go-calc').then(({ computeViaGo }) => {
+      if (cancelled) return
+      setGoResult(computeViaGo(focusConfig))
+    })
+    return () => { cancelled = true }
   }, [focusConfig])
 
   const eligibleBuffs = useMemo(() => {

@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { useCharacterConfigs } from '@/store/character-configs'
 import { useT } from '@/i18n/store'
-import { exportGood } from '@/integration/good-adapter'
 
 export default function Settings() {
   const t = useT()
@@ -35,12 +34,14 @@ export default function Settings() {
     })
   }
 
-  function onExportGood() {
+  async function onExportGood() {
     const allConfigs = Object.values(configs)
     if (allConfigs.length === 0) {
       setMessage(t('settings.noConfigsToExport'))
       return
     }
+    setMessage(t('settings.loadingGoodEngine'))
+    const { exportGood } = await import('@/integration/good-adapter')
     const good = exportGood(allConfigs)
     const json = JSON.stringify(good, null, 2)
     const blob = new Blob([json], { type: 'application/json' })

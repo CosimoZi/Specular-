@@ -246,6 +246,7 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'settings.goodExportBtn': '导出 GOOD JSON',
     'settings.goodExportDone': '已导出（{c} 角色 / {w} 武器 / {a} 圣遗物）',
     'settings.noConfigsToExport': '还没配置角色，没什么可导的',
+    'settings.loadingGoodEngine': '加载 GO 引擎…',
     'settings.clearAll': '清空所有角色配置',
     'settings.clearConfirm': '确定要清空所有角色配置吗？此操作不可撤销。',
     'settings.futureSync': '未来的同步方案',
@@ -504,6 +505,7 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'settings.goodExportBtn': 'Export GOOD JSON',
     'settings.goodExportDone': 'Exported ({c} characters / {w} weapons / {a} artifacts)',
     'settings.noConfigsToExport': "No character configs to export",
+    'settings.loadingGoodEngine': 'Loading GO engine…',
     'settings.clearAll': 'Clear all character configs',
     'settings.clearConfirm':
       'Clear all character configs? This cannot be undone.',
