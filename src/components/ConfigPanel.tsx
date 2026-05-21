@@ -60,6 +60,13 @@ export default function ConfigPanel({
   const patch = useCharacterConfigs((s) => s.patch)
   const setArtifact = useCharacterConfigs((s) => s.setArtifact)
   const reset = useCharacterConfigs((s) => s.reset)
+  // Multi-build awareness
+  const buildIds = useCharacterConfigs((s) => s.listBuilds(characterId))
+  const activeBuildId = useCharacterConfigs((s) => s.getActiveBuildId(characterId))
+  const setActiveBuildId = useCharacterConfigs((s) => s.setActiveBuildId)
+  const createBuild = useCharacterConfigs((s) => s.createBuild)
+  const renameBuild = useCharacterConfigs((s) => s.renameBuild)
+  const deleteBuild = useCharacterConfigs((s) => s.deleteBuild)
 
   const upd = <K extends keyof CharacterConfig>(k: K, v: CharacterConfig[K]) =>
     patch(characterId, { [k]: v })
@@ -143,6 +150,17 @@ export default function ConfigPanel({
 
   return (
     <div className="space-y-5">
+      {/* Build picker — pick / create / rename / delete named builds */}
+      <BuildPicker
+        characterId={characterId}
+        buildIds={buildIds}
+        activeBuildId={activeBuildId}
+        onSwitch={(b) => setActiveBuildId(characterId, b)}
+        onCreate={(name, cloneFrom) => createBuild(characterId, name, cloneFrom)}
+        onRename={(oldId, newId) => renameBuild(characterId, oldId, newId)}
+        onDelete={(b) => deleteBuild(characterId, b)}
+        t={t}
+      />
       {/* Character section */}
       <Section title={t('config.character')}>
         <NumberRow label={t('player.charLevel')} value={config.level} min={1} max={90} step={1} onChange={(v) => upd('level', v)} />
@@ -421,4 +439,95 @@ function isPercentStat(k: ArtifactSubStat | ArtifactPiece['mainStat']): boolean 
 function formatStatValue(k: ArtifactSubStat | ArtifactPiece['mainStat'], v: number, plain = false): string {
   if (isPercentStat(k)) return `${(v * 100).toFixed(1)}${plain ? '' : '%'}`
   return v.toFixed(0)
+}
+
+function BuildPicker({
+  buildIds, activeBuildId, onSwitch, onCreate, onRename, onDelete, t,
+}: {
+  characterId: number | string
+  buildIds: string[]
+  activeBuildId: string
+  onSwitch: (id: string) => void
+  onCreate: (name: string, cloneFrom?: string) => void
+  onRename: (oldId: string, newId: string) => void
+  onDelete: (id: string) => void
+  t: (k: string, f?: string) => string
+}) {
+  const sorted = [...buildIds].sort()
+  const isImported = activeBuildId === 'imported'
+  function promptNew(cloneFrom?: string) {
+    const name = window.prompt(t('build.promptNewName'), cloneFrom ?? '')
+    if (!name) return
+    const clean = name.trim().slice(0, 30)
+    if (!clean || sorted.includes(clean)) return
+    onCreate(clean, cloneFrom)
+  }
+  function promptRename() {
+    if (!activeBuildId) return
+    const next = window.prompt(t('build.promptRename'), activeBuildId)
+    if (!next) return
+    const clean = next.trim().slice(0, 30)
+    if (!clean || clean === activeBuildId || sorted.includes(clean)) return
+    onRename(activeBuildId, clean)
+  }
+  function confirmDelete() {
+    if (!confirm(t('build.confirmDelete').replace('{n}', activeBuildId))) return
+    onDelete(activeBuildId)
+  }
+  return (
+    <section className="border border-indigo-200 dark:border-indigo-900 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 px-3 py-2 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-zinc-500 shrink-0">{t('build.activeBuild')}</span>
+        <select
+          value={activeBuildId}
+          onChange={(e) => onSwitch(e.target.value)}
+          className="flex-1 px-2 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm"
+        >
+          {sorted.length === 0 ? (
+            <option value={activeBuildId}>{activeBuildId}</option>
+          ) : (
+            sorted.map((id) => (
+              <option key={id} value={id}>
+                {id === 'imported' ? `${id} · ${t('build.fromUid')}` : id}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+      <div className="flex gap-1.5 text-xs">
+        <button
+          onClick={() => promptNew()}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800"
+        >
+          + {t('build.new')}
+        </button>
+        <button
+          onClick={() => promptNew(activeBuildId)}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800"
+        >
+          ⎘ {t('build.duplicate')}
+        </button>
+        <button
+          onClick={promptRename}
+          disabled={isImported}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          title={isImported ? t('build.cantEditImported') : undefined}
+        >
+          ✏ {t('build.rename')}
+        </button>
+        <button
+          onClick={confirmDelete}
+          disabled={sorted.length <= 1}
+          className="ml-auto px-2 py-1 rounded border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          🗑 {t('build.delete')}
+        </button>
+      </div>
+      {isImported && (
+        <p className="text-[10px] text-zinc-500 leading-tight">
+          {t('build.importedHint')}
+        </p>
+      )}
+    </section>
+  )
 }

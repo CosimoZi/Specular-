@@ -25,7 +25,7 @@ const WEAPON_FILTERS: WeaponType[] = [
 export default function Characters() {
   const t = useT()
   const locale = useI18n((s) => s.locale)
-  const configs = useCharacterConfigs((s) => s.configs)
+  const characters = useCharacterConfigs((s) => s.characters)
   const all = useMemo(() => listCharacters(), [])
   const [query, setQuery] = useState('')
   const [elemFilter, setElemFilter] = useState<Set<string>>(new Set())
@@ -58,16 +58,17 @@ export default function Characters() {
     const unconf: CharacterIndexEntry[] = []
     for (const c of all) {
       if (!matches(c)) continue
-      const cfg = configs[String(c.id)]
-      if (isConfigured(cfg)) {
-        conf.push({ c, lastModified: cfg?.lastModified ?? 0 })
+      const charBuilds = characters[String(c.id)]
+      const activeBuild = charBuilds?.builds[charBuilds.activeBuildId]
+      if (isConfigured(activeBuild)) {
+        conf.push({ c, lastModified: activeBuild?.lastModified ?? 0 })
       } else {
         unconf.push(c)
       }
     }
     conf.sort((a, b) => b.lastModified - a.lastModified)
     return { configured: conf.map((x) => x.c), unconfigured: unconf }
-  }, [all, query, elemFilter, rankFilter, weaponFilter, configs, locale])
+  }, [all, query, elemFilter, rankFilter, weaponFilter, characters, locale])
 
   const toggle = <T extends string | number>(
     set: Set<T>,

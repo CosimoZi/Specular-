@@ -6,11 +6,15 @@ export default function Settings() {
   const t = useT()
   const exportJson = useCharacterConfigs((s) => s.exportJson)
   const importJson = useCharacterConfigs((s) => s.importJson)
-  const configs = useCharacterConfigs((s) => s.configs)
+  const characters = useCharacterConfigs((s) => s.characters)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const characterCount = Object.keys(configs).length
+  const characterCount = Object.keys(characters).length
+  const totalBuilds = Object.values(characters).reduce(
+    (n, c) => n + Object.keys(c.builds).length,
+    0,
+  )
 
   function onExport() {
     const json = exportJson()
@@ -35,7 +39,10 @@ export default function Settings() {
   }
 
   async function onExportGood() {
-    const allConfigs = Object.values(configs)
+    // GOOD export: collapse each character to its active build only.
+    const allConfigs = Object.values(characters).map(
+      (c) => c.builds[c.activeBuildId],
+    ).filter(Boolean)
     if (allConfigs.length === 0) {
       setMessage(t('settings.noConfigsToExport'))
       return
@@ -73,7 +80,7 @@ export default function Settings() {
         <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
         <p className="text-sm text-zinc-500 mt-2">
           {t('settings.storage')}: <strong>localStorage</strong>{' '}
-          <span className="text-zinc-400">({characterCount} {t('settings.charactersStored')})</span>
+          <span className="text-zinc-400">({characterCount} {t('settings.charactersStored')} / {totalBuilds} builds)</span>
         </p>
       </div>
 

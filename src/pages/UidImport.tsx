@@ -10,7 +10,9 @@ import { useT } from '@/i18n/store'
 export default function UidImport() {
   const t = useT()
   const setMany = useImportedBuilds((s) => s.setMany)
-  const setConfig = useCharacterConfigs((s) => s.set)
+  // UID import writes to each character's `imported` build only — never
+  // overwrites user-named custom builds (main / 蒸发 / etc.).
+  const setImported = useCharacterConfigs((s) => s.setImported)
   const navigate = useNavigate()
   const [uid, setUid] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,7 +37,7 @@ export default function UidImport() {
       // as "configured" in /characters with weapon + 5 artifact pieces filled.
       let n = 0
       for (const b of r.builds) {
-        setConfig(b.characterId, b.fullConfig)
+        setImported(b.characterId, b.fullConfig)
         n++
       }
       setImportedCount(n)

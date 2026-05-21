@@ -119,7 +119,16 @@ export default function Team() {
   const setFocus = useTeamConfig((s) => s.setFocus)
   const teamPatch = useTeamConfig((s) => s.patch)
   const toggleBuff = useTeamConfig((s) => s.toggleBuff)
-  const configsMap = useCharacterConfigs((s) => s.configs)
+  // Flatten characters → active-build-only map (for buff filtering / picker).
+  const characters = useCharacterConfigs((s) => s.characters)
+  const configsMap = useMemo(() => {
+    const out: Record<string, CharacterConfig> = {}
+    for (const [k, c] of Object.entries(characters)) {
+      const cfg = c.builds[c.activeBuildId]
+      if (cfg) out[k] = cfg
+    }
+    return out
+  }, [characters])
   const getConfig = useCharacterConfigs((s) => s.get)
   const allCharacters = useMemo(() => listCharacters(), [])
 
