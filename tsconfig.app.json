@@ -8,7 +8,8 @@
     "skipLibCheck": true,
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@genshin-optimizer/pando/engine": ["./vendor/go/pando/engine/src/index.ts"]
     },
 
     /* Bundler mode */
@@ -25,5 +26,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "vendor/go"],
+  "exclude": ["vendor/**/*.spec.ts", "vendor/**/*.test.ts"]
 }

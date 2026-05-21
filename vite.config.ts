@@ -13,6 +13,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      // Vendored GO packages — see vendor/go/ and tsconfig.app.json paths.
+      '@genshin-optimizer/pando/engine': path.resolve(
+        __dirname,
+        'vendor/go/pando/engine/src/index.ts',
+      ),
     },
   },
 })
