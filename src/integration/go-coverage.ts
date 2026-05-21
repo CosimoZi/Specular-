@@ -19,6 +19,7 @@ export const FULLY_WIRED_CHARACTERS: ReadonlySet<string> = new Set<string>([
   'Candace',
   'Nahida',
   'Nilou',
+  'Shenhe',
 ])
 
 export type WiringTier = 'wired' | 'stub'

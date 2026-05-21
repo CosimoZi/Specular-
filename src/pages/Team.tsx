@@ -734,7 +734,7 @@ function CoverageBanner({ t }: { t: (k: string, f?: string) => string }) {
   // The wired-character key list lives in src/integration/go-coverage.ts.
   // Display copy uses the localized character names so the banner reads
   // naturally; keep this in sync if the wired list grows.
-  const list = ['那希妲', '妮露', '坎蒂丝'].join('、')
+  const list = ['那希妲', '妮露', '坎蒂丝', '申鹤'].join('、')
   return (
     <div className="text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2 leading-snug">
       {t('team.coverageBanner')

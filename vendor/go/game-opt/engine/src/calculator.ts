@@ -60,9 +60,20 @@ export class Calculator<
       return finalize({ op, ops, ...info })
     }
     function wrap(
-      result: CalcResult<number | string, CalcMeta<Tag_, COp>>,
+      result: CalcResult<number | string, CalcMeta<Tag_, COp>> | undefined,
       extraCats?: (keyof Tag_)[]
     ): CalcMeta<Tag_, COp> {
+      // SPECULAR-PATCH: When a `read` op finds zero matching entries (e.g. a
+      // damage formula references a sheet-specific value that was never
+      // .add()'d for this build), the base Pando calculator returns val=0
+      // with an empty `pre` array. `_x` then bubbles up as `[]` here, x[0]
+      // is undefined, and the original `let { meta } = result` line would
+      // crash with "Cannot destructure property 'meta' of 'result' as it
+      // is undefined." Fall back to a sensible empty-meta in that case so
+      // the parent expression can compute its value instead of throwing.
+      if (!result) {
+        return finalize({ op: 'const', ops: [], ...info })
+      }
       let { meta } = result
       if (extraCats?.some((c) => !meta.usedCats.has(c)))
         meta = { ...meta, usedCats: new Set([...meta.usedCats, ...extraCats]) }

@@ -362,6 +362,21 @@ export const conditionals = {
       type: 'bool',
     },
   },
+  Shenhe: {
+    quillActive: { sheet: 'Shenhe', name: 'quillActive', type: 'bool' },
+    a1Field: { sheet: 'Shenhe', name: 'a1Field', type: 'bool' },
+    burstField: { sheet: 'Shenhe', name: 'burstField', type: 'bool' },
+    a4Press: { sheet: 'Shenhe', name: 'a4Press', type: 'bool' },
+    a4Hold: { sheet: 'Shenhe', name: 'a4Hold', type: 'bool' },
+    c4Stacks: {
+      sheet: 'Shenhe',
+      name: 'c4Stacks',
+      type: 'num',
+      int_only: true,
+      min: 0,
+      max: 50,
+    },
+  },
   ShimenawasReminiscence: {
     someBoolConditional: {
       sheet: 'ShimenawasReminiscence',
@@ -2156,18 +2171,20 @@ export const formulas = {
     },
   },
   Shenhe: {
-    normal1: {
-      sheet: 'Shenhe',
-      name: 'normal1',
-      tag: {
-        et: 'own',
-        qt: 'formula',
-        q: 'dmg',
-        sheet: 'Shenhe',
-        move: 'normal',
-        name: 'normal1',
-      },
-    },
+    normal_0: { sheet: 'Shenhe', name: 'normal_0', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'normal', name: 'normal_0' } },
+    normal_1: { sheet: 'Shenhe', name: 'normal_1', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'normal', name: 'normal_1' } },
+    normal_2: { sheet: 'Shenhe', name: 'normal_2', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'normal', name: 'normal_2' } },
+    normal_3: { sheet: 'Shenhe', name: 'normal_3', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'normal', name: 'normal_3' } },
+    normal_4: { sheet: 'Shenhe', name: 'normal_4', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'normal', name: 'normal_4' } },
+    charged: { sheet: 'Shenhe', name: 'charged', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'charged', name: 'charged' } },
+    plunging_dmg: { sheet: 'Shenhe', name: 'plunging_dmg', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'plunging', name: 'plunging_dmg' } },
+    plunging_low: { sheet: 'Shenhe', name: 'plunging_low', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'plunging', name: 'plunging_low' } },
+    plunging_high: { sheet: 'Shenhe', name: 'plunging_high', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'plunging', name: 'plunging_high' } },
+    skill_press: { sheet: 'Shenhe', name: 'skill_press', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'skill', name: 'skill_press' } },
+    skill_hold: { sheet: 'Shenhe', name: 'skill_hold', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'skill', name: 'skill_hold' } },
+    burst: { sheet: 'Shenhe', name: 'burst', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'burst', name: 'burst' } },
+    burst_dot: { sheet: 'Shenhe', name: 'burst_dot', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'burst', name: 'burst_dot' } },
+    icy_quill: { sheet: 'Shenhe', name: 'icy_quill', tag: { et: 'own', qt: 'formula', q: 'dmg', sheet: 'Shenhe', move: 'skill', name: 'icy_quill' } },
   },
   ShikanoinHeizou: {
     normal1: {
