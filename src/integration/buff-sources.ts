@@ -195,9 +195,91 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
 // Registry
 // =============================================================================
 
+// =============================================================================
+// Linnea (莉奈娅)
+// =============================================================================
+export const LINNEA_BUFFS: CharacterBuffDescriptor = [
+  {
+    source: {
+      type: 'passive1',
+      label: { zh: '固有天赋 1 · 野外观察手记', en: 'Passive 1 — Field Notes' },
+    },
+    name: { zh: '露米在场 → 敌人岩抗 -15%', en: 'Lumi out → enemy geo RES -15%' },
+    effect: {
+      zh: '露米在场时,附近敌人的岩元素抗性 -15%。',
+      en: 'While Lumi is out, nearby enemies have -15% geo RES.',
+    },
+    condName: 'lumiActive',
+  },
+  {
+    source: {
+      type: 'passive1',
+      label: { zh: '固有天赋 1 · 野外观察手记', en: 'Passive 1 — Field Notes' },
+    },
+    name: { zh: '月兆·满辉 → 敌人岩抗再 -15%', en: 'Moon-full → enemy geo RES additional -15%' },
+    effect: {
+      zh: '月兆·满辉:呼唤露米上场后,露米附近敌人的岩元素抗性进一步 -15%(与上一条相加 -30%)。',
+      en: 'During Moon-full state, after summoning Lumi, nearby enemies have an additional -15% geo RES (stacks with the above to -30%).',
+    },
+    condName: 'moonFull',
+  },
+  {
+    source: {
+      type: 'passive2',
+      label: { zh: '固有天赋 2 · 月兆祝赐·栖地考察', en: 'Passive 2 — Moon-Sign Blessing' },
+    },
+    name: { zh: '基于 DEF 的月反应基础伤害提升', en: 'Moon-reaction base DMG up (DEF-scaling)' },
+    effect: {
+      zh: '每 100 点防御力,月结晶反应的基础伤害提升 0.7%,至多 +14%。常驻,不需要勾选。',
+      en: 'Per 100 DEF, moon-crystallize base damage +0.7% (cap +14%). Passive, no toggle.',
+    },
+    valueAt: (_c) => ({ zh: '常驻(随 DEF 自动)', en: 'Always-on (auto from DEF)' }),
+  },
+  {
+    source: {
+      type: 'constellation',
+      ordinal: 1,
+      label: { zh: '命之座 1 · 未完成的分类', en: 'C1 — Unfinished Classification' },
+    },
+    name: { zh: '历览编录消耗层数', en: '"Comprehensive Index" stacks consumed' },
+    effect: {
+      zh: '每消耗一层历览编录,月结晶反应伤害额外增加 DEF × 75%(基础伤害区)。这里填的是"已消耗"的总层数。',
+      en: 'Each consumed stack adds DEF × 75% to the moon-crystallize base damage. Enter the total stacks consumed.',
+    },
+    condName: 'c1StacksConsumed',
+  },
+  {
+    source: {
+      type: 'constellation',
+      ordinal: 2,
+      label: { zh: '命之座 2 · 喜或悲的谕告', en: 'C2 — Tidings of Joy and Sorrow' },
+    },
+    name: { zh: '月笼谐奏 → 水/岩 暴击伤害 +40%', en: 'Resonance → Hydro/Geo CDmg +40%' },
+    effect: {
+      zh: '触发月笼谐奏后的 8 秒内,所有水/岩元素类型的角色的暴击伤害 +40%。',
+      en: 'For 8s after Resonance triggers, hydro/geo characters gain +40% CRIT DMG.',
+    },
+    condName: 'c2Resonance',
+  },
+  {
+    source: {
+      type: 'constellation',
+      ordinal: 4,
+      label: { zh: '命之座 4 · 专家的直感觉', en: 'C4 — Expert Intuition' },
+    },
+    name: { zh: '月笼谐奏 → DEF +25%/层', en: 'Resonance → DEF +25% / stack' },
+    effect: {
+      zh: '触发月笼谐奏后的 5 秒内,莉奈娅与队伍中当前场上角色的防御力分别 +25%。莉奈娅在场时此效果可叠加(最多 2 层)。',
+      en: '5s after Resonance, Linnea and the active character each gain +25% DEF. On Linnea this stacks (max 2).',
+    },
+    condName: 'c4DefStacks',
+  },
+]
+
 /** Map from GO character key → buff descriptor. */
 export const CHARACTER_BUFF_DESCRIPTORS: Record<string, CharacterBuffDescriptor> = {
   Shenhe: SHENHE_BUFFS,
+  Linnea: LINNEA_BUFFS,
   // TODO: Nahida, Nilou, Candace, then Bennett / Furina / Xiangling / Xingqiu / etc.
 }
 

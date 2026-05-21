@@ -25,6 +25,20 @@ import {
 } from '@genshin-optimizer/gi/formula'
 import { extractCondMetadata } from '@genshin-optimizer/game-opt/formula'
 import { entries as allEntries } from '@genshin-optimizer/gi/formula'
+import { condsFor as newSheetCondsForRaw } from '@/calc/sheets'
+
+/** Bridge from src/calc/sheets/'s CondDef → go-calc's CondInfo shape. */
+function newSheetCondsFor(sheetKey: string): CondInfo[] {
+  const conds = newSheetCondsForRaw(sheetKey)
+  return conds.map((c) => ({
+    sheet: sheetKey,
+    name: c.name,
+    type: c.type,
+    int_only: c.intOnly,
+    min: c.min,
+    max: c.max,
+  }))
+}
 import type { CharacterConfig } from '@/data/config-types'
 import {
   configToGoCharacter,
@@ -143,8 +157,15 @@ const condRegistry = extractCondMetadata(
 ) as Record<string, Record<string, CondInfo>>
 
 /** List every conditional buff a given GO sheet (character/weapon/artifact)
- *  exposes. Filters out stub-only entries that don't actually wire to a buff. */
+ *  exposes. Prefers the new src/calc/sheets/ definitions when available;
+ *  falls back to the legacy GO vendor cond registry for characters not yet
+ *  ported. Filters out stub-only entries that don't actually wire to a buff. */
 export function listCondsForSheet(sheetKey: string): CondInfo[] {
+  // 1) New src/calc/sheets/ definitions (Shenhe, Linnea, …) take priority.
+  const newConds = newSheetCondsFor(sheetKey)
+  if (newConds.length > 0) return newConds
+  // 2) Legacy vendor/GO registry — for characters / weapons / artifact sets
+  // that haven't been ported to src/calc/ yet.
   const reg = condRegistry[sheetKey]
   if (!reg) return []
   return Object.values(reg).filter((c) => !STUB_COND_NAMES.has(c.name))
