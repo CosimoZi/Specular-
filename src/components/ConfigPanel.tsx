@@ -31,6 +31,7 @@ import {
   defaultAscensionFor,
   MAX_LEVEL_BY_ASCENSION,
 } from '@/data/character-stats'
+import { defaultConfig } from '@/data/config-types'
 
 const SUBSTAT_OPTIONS: ArtifactSubStat[] = [
   'critRate',
@@ -56,17 +57,30 @@ export default function ConfigPanel({
   const locale = useI18n((s) => s.locale)
   const STAT_LABEL = locale === 'en' ? STAT_LABEL_EN : STAT_LABEL_ZH
   const SLOT_LABEL = locale === 'en' ? SLOT_LABEL_EN : SLOT_LABEL_ZH
-  const config = useCharacterConfigs((s) => s.get(characterId))
+  // Read the raw character entry from the store. Functional selectors like
+  // `s.get(id)` / `s.listBuilds(id)` return a fresh object/array on each
+  // invocation, which trips React's useSyncExternalStore equality check
+  // (Zustand uses Object.is by default) and triggers an infinite re-render
+  // loop. Always select primitive / stable references and derive the rest
+  // with useMemo.
+  const characterEntry = useCharacterConfigs((s) => s.characters[String(characterId)])
   const patch = useCharacterConfigs((s) => s.patch)
   const setArtifact = useCharacterConfigs((s) => s.setArtifact)
   const reset = useCharacterConfigs((s) => s.reset)
-  // Multi-build awareness
-  const buildIds = useCharacterConfigs((s) => s.listBuilds(characterId))
-  const activeBuildId = useCharacterConfigs((s) => s.getActiveBuildId(characterId))
   const setActiveBuildId = useCharacterConfigs((s) => s.setActiveBuildId)
   const createBuild = useCharacterConfigs((s) => s.createBuild)
   const renameBuild = useCharacterConfigs((s) => s.renameBuild)
   const deleteBuild = useCharacterConfigs((s) => s.deleteBuild)
+
+  const config = useMemo<CharacterConfig>(() => {
+    if (!characterEntry) return defaultConfig(characterId)
+    return characterEntry.builds[characterEntry.activeBuildId] ?? defaultConfig(characterId)
+  }, [characterEntry, characterId])
+  const buildIds = useMemo(
+    () => Object.keys(characterEntry?.builds ?? {}),
+    [characterEntry],
+  )
+  const activeBuildId = characterEntry?.activeBuildId ?? 'main'
 
   const upd = <K extends keyof CharacterConfig>(k: K, v: CharacterConfig[K]) =>
     patch(characterId, { [k]: v })

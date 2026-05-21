@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { displayName, getCharacterIndex, iconUrl } from '@/data'
 import { loadCharacterMeta, type CharacterMeta } from '@/data/meta'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
 import { useCharacterConfigs } from '@/store/character-configs'
+import { defaultConfig } from '@/data/config-types'
 import ConfigPanel from '@/components/ConfigPanel'
 
 export default function CharacterDetail() {
@@ -15,7 +16,18 @@ export default function CharacterDetail() {
   const [meta, setMeta] = useState<CharacterMeta | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const config = useCharacterConfigs((s) => (id ? s.get(id) : null))
+  // Read raw store entry — functional selectors like s.get(id) return a fresh
+  // defaultConfig() object whenever the character has no entry, which trips
+  // useSyncExternalStore into an infinite render loop. Always select stable
+  // refs and derive with useMemo.
+  const characterEntry = useCharacterConfigs((s) =>
+    id ? s.characters[String(id)] : undefined,
+  )
+  const config = useMemo(() => {
+    if (!id) return null
+    if (!characterEntry) return defaultConfig(id)
+    return characterEntry.builds[characterEntry.activeBuildId] ?? defaultConfig(id)
+  }, [characterEntry, id])
   const patch = useCharacterConfigs((s) => s.patch)
 
   useEffect(() => {

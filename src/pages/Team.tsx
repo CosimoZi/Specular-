@@ -130,7 +130,6 @@ export default function Team() {
     }
     return out
   }, [characters])
-  const getConfig = useCharacterConfigs((s) => s.get)
   const allCharacters = useMemo(() => listCharacters(), [])
 
   const [pickerSlot, setPickerSlot] = useState<number | null>(null)
@@ -148,7 +147,13 @@ export default function Team() {
 
   const focusIdx = team.focusIndex ?? team.slots.findIndex((s) => s !== null)
   const focusCharId = focusIdx >= 0 ? team.slots[focusIdx] : null
-  const focusConfig = focusCharId != null ? getConfig(focusCharId) : null
+  // Resolve focusConfig stably from configsMap so it doesn't flip identity on
+  // every render when the character has no entry (which would tank useEffect
+  // deps below and trip the same kind of loop as /characters/<id> had).
+  const focusConfig = useMemo(() => {
+    if (focusCharId == null) return null
+    return configsMap[String(focusCharId)] ?? null
+  }, [focusCharId, configsMap])
   const focusIdx_data = focusCharId != null ? getCharacterIndex(focusCharId) : null
   const focusMeta = focusCharId != null ? metaMap[String(focusCharId)] : null
 
@@ -302,7 +307,7 @@ export default function Team() {
             onFocus={() => setFocus(slotIdx)}
             locale={locale}
             t={t}
-            config={charId != null ? getConfig(charId) : null}
+            config={charId != null ? configsMap[String(charId)] ?? null : null}
           />
         ))}
       </div>
