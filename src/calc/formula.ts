@@ -12,7 +12,7 @@
 
 import { evaluate, type Node } from './ast'
 import type { Scope } from './scope'
-import { TRANSFORMATIVE_REACTION_BASE, MOON_REACTION_REACTION_COEFF, MOON_REACTION_DIRECT_COEFF } from './data/reaction-base'
+import { TRANSFORMATIVE_REACTION_BASE, MOON_REACTION_COEFF, type MoonReactionType } from './data/reaction-base'
 
 export type ElementKey =
   | 'pyro' | 'hydro' | 'cryo' | 'electro' | 'anemo' | 'geo' | 'dendro' | 'physical'
@@ -44,6 +44,9 @@ export interface FormulaDef {
   element: ElementKey
   /** What kind of damage formula. Default 'standard'. */
   kind?: FormulaKind
+  /** For reactionMoon / directMoon: which moon reaction this is. Determines
+   *  the coefficient (crystallize=1.6, electrocharged=3, bloom=TBD). */
+  moonReaction?: MoonReactionType
   /** AST for the base damage zone (standard) or for the multiplier × stat
    *  expression (directMoon). For reactionMoon this is an optional flat
    *  addition (e.g. Linnea C1 stack-consume DEF flat add). */
@@ -130,15 +133,14 @@ export function evaluateFormula(def: FormulaDef, ctx: FormulaContext): FormulaRe
     dmgBonus = 1 + emBonus + dmgBoost
     defMulti = 1
 
+    const reaction = def.moonReaction ?? 'crystallize'
+    const coeff = MOON_REACTION_COEFF[reaction]
     if (kind === 'reactionMoon') {
       const levelBase = TRANSFORMATIVE_REACTION_BASE[Math.floor(charLevel)] ?? 0
-      base = levelBase * MOON_REACTION_REACTION_COEFF * (1 + baseBoost) + baseExpr
+      base = levelBase * coeff * (1 + baseBoost) + baseExpr
     } else {
-      // directMoon: 3 × main_stat × multiplier (from baseExpr) × (1 + baseBoost) + flat
-      // baseExpr is expected to encode `mainStat × multiplier`. We multiply by
-      // 3 and by (1 + baseBoost) here. Flat adds aren't standard for direct
-      // moon yet — drop in if needed via a separate scope slot.
-      base = MOON_REACTION_DIRECT_COEFF * baseExpr * (1 + baseBoost)
+      // directMoon: coeff × main_stat × multiplier (from baseExpr) × (1 + baseBoost)
+      base = coeff * baseExpr * (1 + baseBoost)
     }
   }
 

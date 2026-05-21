@@ -45,6 +45,7 @@ export const LinneaFormulas: FormulaDef[] = [
     move: 'skill',
     element: 'geo',
     kind: 'reactionMoon',
+    moonReaction: 'crystallize',
     base: prod(v('final.def'), v('cond.Linnea.c1StacksConsumed', 0), c(0.75)),
   },
 ]

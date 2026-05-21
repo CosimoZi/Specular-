@@ -33,13 +33,19 @@ export const TRANSFORMATIVE_REACTION_BASE: readonly number[] = [
   1593.5062, 1621.0258, 1643.8679, 1662.1382, 1674.8092,
 ]
 
-/** Reaction coefficient for the "reaction-form" lunar reactions (月感电 /
- *  月绽放 / 月结晶). The total reaction base damage is
- *  `TRANSFORMATIVE_REACTION_BASE[lvl] × MOON_REACTION_REACTION_COEFF`.
- *  Source: 月白姬君's formula reference (community-authoritative). */
-export const MOON_REACTION_REACTION_COEFF = 1.6
+/** Reaction-type identifier for moon reactions. */
+export type MoonReactionType = 'crystallize' | 'electrocharged' | 'bloom'
 
-/** Reaction coefficient for the "direct-form" lunar reactions (e.g. 雷暴云,
- *  some constellation-triggered moon damage). Multiplies a main-stat × multi
- *  expression. */
-export const MOON_REACTION_DIRECT_COEFF = 3.0
+/** Per-reaction coefficient. Source: 月白姬君's formula reference.
+ *  - 月结晶 (crystallize): 1.6 — Linnea
+ *  - 月感电 (electrocharged): 3 — 菲林斯 / 伊涅芙
+ *  - 月绽放 (bloom): TBD — fill in when first character using it lands
+ *
+ *  This coefficient multiplies the level-base damage (for `reactionMoon`
+ *  kind) OR the main-stat × multiplier expression (for `directMoon` kind).
+ *  Both forms use the same per-reaction coefficient. */
+export const MOON_REACTION_COEFF: Record<MoonReactionType, number> = {
+  crystallize: 1.6,
+  electrocharged: 3,
+  bloom: 1.6, // placeholder; revise when a 月绽放 character is wired
+}
