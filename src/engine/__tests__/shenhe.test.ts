@@ -16,7 +16,7 @@ function shenheConfig(): CharacterConfig {
     ascensionStage: 6,
     constellation: 0,
     talentLevels: { auto: 10, skill: 10, burst: 10 },
-    weapon: { weaponId: 13509, level: 90, ascensionStage: 6, refinement: 1 }, // Calamity Queller
+    weapon: { weaponId: 13507, level: 90, ascensionStage: 6, refinement: 1 }, // Calamity Queller
     artifacts: {},
     lastModified: Date.now(),
   }
@@ -35,33 +35,18 @@ function ayakaConfig(): CharacterConfig {
 }
 
 describe('Shenhe — hand-wired sheet', () => {
-  // Vendor-bug regression baseline. With Shenhe + Calamity Queller L90 R1
-  // (no artifacts), the engine reports:
-  //   base.atk    = 911.83
-  //   premod.atk_ = 0.288   (Shenhe A6 ascension only — weapon's 16.5% substat ATK% missing!)
-  //   final.atk   = 1174.44
-  //
-  // Expected per wiki + game data:
-  //   char_base_atk    = 23.6474 × 8.739 (ATTACK_S5 L90 curve) = 206.66
+  // Panel baseline — Shenhe L90 A6 C0 + Calamity Queller L90 A6 R1, no artifacts.
+  //   char_base_atk    = 23.6474 × ATTACK_S5[90] = 206.66
   //   + char_asc_atk   = 97.10 (Shenhe A6 atk ascension)
   //   = 303.76 char total
-  //   weapon_base_atk  = 49.1377 × 11.272 (ATTACK_303 L90)    = 553.88
+  //   weapon_base_atk  = 49.1377 × ATTACK_303[90] = 553.88
   //   + weapon_asc_atk = 186.7 (CalamityQueller A6)
   //   = 740.58 weapon total
-  //   weapon_substat   = 0.036 × 4.594 (CRITICAL_301 L90)     = 16.54%
+  //   weapon_substat   = 0.036 × CRITICAL_301[90] = 16.54% atk_
   //   Total base.atk = 1044.34
   //   Total premod.atk_ = 0.288 + 0.165 = 0.453
-  //   Total final.atk = 1044.34 × 1.453 ≈ 1517.4
-  //
-  // Two latent vendor bugs:
-  //   (1) base.atk short by 132.5 — weapon ascension flat ATK reads at wrong
-  //       index or partially missed
-  //   (2) weapon substat ATK% not propagating to premod.atk_ at all
-  //
-  // Tracked separately. All RELATIVE damage tests pass because everything
-  // routes through the same (consistent) base.atk; only absolute matchup
-  // with wiki is off.
-  it('panel baseline (regression check — currently undercounts weapon stats)', async () => {
+  //   Total final.atk = 1044.34 × 1.453 ≈ 1517
+  it('panel baseline matches game-data formula', async () => {
     const { genshinCalculatorWithEntries, charData, weaponData, teamData, withMember, own, ownBuff, enemyDebuff } =
       await import('@genshin-optimizer/gi/formula')
     const { configToGoCharacter, weaponConfigToGoWeapon } = await import('@/integration/good-adapter')
@@ -76,10 +61,9 @@ describe('Shenhe — hand-wired sheet', () => {
       ownBuff.common.critMode.add('avg'),
     ])
     const mem = calc.withTag({ src: '0' })
-    expect(mem.compute(own.base.atk as never).val).toBeCloseTo(911.83, 1)
-    expect(mem.compute(own.premod.atk_ as never).val).toBeCloseTo(0.288, 3)
-    // When vendor bug is fixed, these should jump to ~1044.34 / 0.453 and the
-    // test will need updating.
+    expect(mem.compute(own.base.atk as never).val).toBeCloseTo(1044.34, 1)
+    expect(mem.compute(own.premod.atk_ as never).val).toBeCloseTo(0.453, 3)
+    expect(mem.compute(own.final.atk as never).val).toBeCloseTo(1517.82, 1)
   })
 
   it('exposes 5 conditionals via the registry', () => {
