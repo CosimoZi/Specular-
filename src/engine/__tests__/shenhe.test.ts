@@ -110,6 +110,27 @@ describe('Shenhe — hand-wired sheet', () => {
     expect(on!.values.charged).toBeCloseTo(off!.values.charged, 0)
   })
 
+  it('C4 stacks lift Shenhe own skill DMG (own-side cond, regression check)', () => {
+    // Shenhe must be C4+ for the buff to fire. Pump c4Stacks via cond.
+    const sh = { ...shenheConfig(), constellation: 6 }
+    const off = computeTeamViaGo([{ config: sh }, null, null, null], 0)
+    const on = computeTeamViaGo([{ config: sh }, null, null, null], 0, {
+      condState: { '0': { Shenhe: { c4Stacks: 20 } } },
+    })
+    expect(off).not.toBeNull()
+    expect(on).not.toBeNull()
+    // C4 gives +5% per stack to Shenhe's own skill DMG. At 20 stacks → +100%
+    // on skill formulas only.
+    expect(on!.values.skill_press).toBeGreaterThan(off!.values.skill_press)
+    expect(on!.values.skill_hold).toBeGreaterThan(off!.values.skill_hold)
+    // Doesn't touch burst or normals.
+    expect(on!.values.burst).toBeCloseTo(off!.values.burst, 0)
+    expect(on!.values.normal_0).toBeCloseTo(off!.values.normal_0, 0)
+    const pct = ((on!.values.skill_press - off!.values.skill_press) / off!.values.skill_press) * 100
+    console.log(`=== C4 (20 stacks) on C6 Shenhe ===`)
+    console.log(`  skill_press: off=${Math.round(off!.values.skill_press)} on=${Math.round(on!.values.skill_press)} (+${pct.toFixed(0)}%)`)
+  })
+
   it('A4 hold dmg_ buffs Ayaka normal hit', () => {
     // A4 hold buff applies +X% dmg to all party members' normal/charged/
     // plunging attacks. With Ayaka in slot 1, her `normal1` formula should

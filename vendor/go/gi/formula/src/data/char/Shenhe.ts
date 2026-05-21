@@ -113,7 +113,6 @@ const {
   a4Press,
   a4Hold,
 } = allBoolConditionals(info.key)
-// C4 stack count, integer 0..maxStacks
 const { c4Stacks } = allNumConditionals(
   info.key,
   true,
@@ -186,12 +185,18 @@ const burst_resShred_ = burstField.ifOn(
 )
 
 // C4 — every Icy Quill consumption stacks +dmg_% to Shenhe's own skill damage.
-//      Matches the old GO sheet's interpretation (in-game text is broader but
-//      the consensus theorycrafting application is to her skill DMG%).
-const c4_skill_dmg_ = cmpGE(
-  constellation,
-  4,
-  prod(c4Stacks, percent(dm.constellation4.dmg_)),
+//      Wired through teamBuff with a src=dst self-gate. teamData's reread
+//      fan-out gives this entry the (src, dst) context the cond read needs;
+//      the cmpEq gate keeps the buff from leaking to teammates' skill DMG.
+const c4_skill_dmg_self = cmpEq(
+  tagVal('src'),
+  tagVal('dst'),
+  cmpGE(
+    constellation,
+    4,
+    prod(c4Stacks, percent(dm.constellation4.dmg_)),
+  ),
+  0,
 )
 
 export default register(
@@ -202,16 +207,13 @@ export default register(
   ownBuff.char.skill.add(cmpGE(constellation, 3, 3)),
   ownBuff.char.burst.add(cmpGE(constellation, 5, 3)),
 
-  // Self buffs ----
-  ownBuff.premod.dmg_.skill.add(c4_skill_dmg_),
-  // Icy Quill — flat cryo damage on every cryo-elemental hit's base zone.
-  // Wired through teamBuff (not ownBuff) so the team-data reread fan-out
-  // establishes the proper (src, dst) tag cache context. The cond read
-  // (quillActive.ifOn(...)) only resolves correctly when src/dst are bound
-  // by the fan-out — direct ownBuff entries don't get that binding. The
-  // element gate via tagVal('ele') still ensures only cryo formulas pick
-  // it up: cryo formulas get +quillFlat in their base zone, physical
-  // formulas get +0.
+  // Self / team buffs — all routed through teamBuff so that cond reads inside
+  // their values get the (src, dst) tag-cache binding from teamData's reread
+  // fan-out. For self-only buffs (C4 skill dmg), gate via
+  // cmpEq(tagVal('src'), tagVal('dst'), value, 0) so the buff only fires on
+  // Shenhe's own own.X reads. The element gate (tagVal('ele') == 'cryo')
+  // confines Icy Quill to cryo formulas.
+  teamBuff.premod.dmg_.skill.add(c4_skill_dmg_self),
   teamBuff.formula.base.add(quillFlatForCryoOnly),
 
   // Team buffs ----
