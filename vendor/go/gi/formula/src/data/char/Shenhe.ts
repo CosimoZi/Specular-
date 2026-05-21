@@ -205,8 +205,14 @@ export default register(
   // Self buffs ----
   ownBuff.premod.dmg_.skill.add(c4_skill_dmg_),
   // Icy Quill — flat cryo damage on every cryo-elemental hit's base zone.
-  // One entry, engine fans out to every cryo formula via prep.ele resolution.
-  ownBuff.formula.base.add(quillFlatForCryoOnly),
+  // Wired through teamBuff (not ownBuff) so the team-data reread fan-out
+  // establishes the proper (src, dst) tag cache context. The cond read
+  // (quillActive.ifOn(...)) only resolves correctly when src/dst are bound
+  // by the fan-out — direct ownBuff entries don't get that binding. The
+  // element gate via tagVal('ele') still ensures only cryo formulas pick
+  // it up: cryo formulas get +quillFlat in their base zone, physical
+  // formulas get +0.
+  teamBuff.formula.base.add(quillFlatForCryoOnly),
 
   // Team buffs ----
   // A1 — active char inside the field gets +15% cryo DMG.

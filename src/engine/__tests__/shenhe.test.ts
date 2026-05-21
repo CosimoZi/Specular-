@@ -70,23 +70,25 @@ describe('Shenhe — hand-wired sheet', () => {
     }
   })
 
-  // TODO: re-enable once the upstream-Pando cond-read-in-ownBuff bug is fixed.
-  // The wiring is correct architecturally — quillFlat is added to
-  // formula.base via cmpEq(tagVal('ele'), 'cryo', flat), so cryo formulas
-  // pick it up and physical ones don't (verified with literal 999). But
-  // `quillActive.ifOn(flat)` evaluates to 0 in the ownBuff.formula.base
-  // value context, even though conditionalData writes the cond entry. The
-  // same cond reads correctly in teamBuff (A1's cryo_dmg_ test passes).
-  // Difference seems to be the team-data reread fan-out establishes src/dst
-  // in teamBuff but not in ownBuff. Investigating.
-  it.skip('toggling quillActive lifts cryo formulas — BLOCKED ON COND-READ BUG', () => {
+  it('toggling quillActive lifts cryo formulas via teamBuff fan-out', () => {
     const sh = shenheConfig()
     const off = computeTeamViaGo([{ config: sh }, null, null, null], 0)
     const on = computeTeamViaGo([{ config: sh }, null, null, null], 0, {
       condState: { '0': { Shenhe: { quillActive: 1 } } },
     })
+    expect(off).not.toBeNull()
+    expect(on).not.toBeNull()
     expect(on!.values.skill_press).toBeGreaterThan(off!.values.skill_press)
+    expect(on!.values.skill_hold).toBeGreaterThan(off!.values.skill_hold)
+    expect(on!.values.burst).toBeGreaterThan(off!.values.burst)
+    expect(on!.values.burst_dot).toBeGreaterThan(off!.values.burst_dot)
+    // Physical normals — polearm default — don't get the cryo-gated flat.
     expect(on!.values.normal_0).toBeCloseTo(off!.values.normal_0, 0)
+    expect(on!.values.charged).toBeCloseTo(off!.values.charged, 0)
+    expect(on!.values.plunging_dmg).toBeCloseTo(off!.values.plunging_dmg, 0)
+    const delta = on!.values.skill_press - off!.values.skill_press
+    console.log(`=== Icy Quill base add (after teamBuff rewire) ===`)
+    console.log(`  skill_press off=${Math.round(off!.values.skill_press)} on=${Math.round(on!.values.skill_press)} (per quill ≈ ${Math.round(delta)})`)
   })
 
   it('A1 cryo DMG bonus boosts Shenhe skill (cryo) but NOT her polearm normal (physical)', () => {
