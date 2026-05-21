@@ -88,12 +88,28 @@ export function getGoKey(characterId: number | string): string | null {
   return goCharacterKey(characterId)
 }
 
+export type FormulaMove = 'normal' | 'charged' | 'plunging' | 'skill' | 'burst' | 'panel' | 'reaction' | 'other'
+
+/** Each formula the focus member exposes, with enough tag info to group it
+ *  in the UI (普攻 / 重击 / 战技 / etc). */
+export interface FormulaResult {
+  name: string
+  value: number
+  move: FormulaMove
+  /** Element override when present (e.g. cryo for icy_quill). */
+  ele?: string
+  /** Reaction name when move = 'reaction' (e.g. 'shattered'). */
+  reaction?: string
+}
+
 export interface GoComputeResult {
   goKey: string
   /** Whether weapon/artifact data was fed for the focus member. */
   fed: { weapon: boolean; artifacts: number }
-  /** Map of formula tag name → computed value, from the focus member's view. */
+  /** Map of formula tag name → computed value (legacy, kept for callers). */
   values: Record<string, number>
+  /** All computed formulas with tag metadata for UI grouping. */
+  formulas: FormulaResult[]
   /** GO keys of every team slot that successfully fed (in slot order). */
   teamKeys: Array<string | null>
 }
@@ -146,6 +162,9 @@ export interface TeamComputeOptions {
   enemyPreRes?: number
   /** Cond state, nested as slotIdx → sheet → condName → value. */
   condState?: Record<string, Record<string, Record<string, number>>>
+  /** For substat-margin compute: which formula's value to measure deltas
+   *  against. Default is the auto-picked "main damage" formula. */
+  targetFormula?: string
 }
 
 const SLOT_KEYS = ['0', '1', '2', '3'] as const
@@ -257,14 +276,25 @@ export function computeTeamViaGo(
     return null
   }
   const mem = calc.withTag({ src: focusSlotKey })
-  const formulas = mem.listFormulas(own.listing.formulas)
+  const formulaList = mem.listFormulas(own.listing.formulas)
   const values: Record<string, number> = {}
-  for (const f of formulas) {
-    const tag = (f as unknown as { tag: { name?: string; q?: string } }).tag
+  const formulas: FormulaResult[] = []
+  for (const f of formulaList) {
+    const tag = (f as unknown as {
+      tag: { name?: string; q?: string; move?: string; ele?: string; trans?: string }
+    }).tag
     const name = String(tag?.name ?? tag?.q ?? 'unnamed')
     try {
       const val = mem.compute(f as unknown as Parameters<typeof mem.compute>[0]).val
-      if (typeof val === 'number' && Number.isFinite(val)) values[name] = val
+      if (typeof val !== 'number' || !Number.isFinite(val)) continue
+      values[name] = val
+      formulas.push({
+        name,
+        value: val,
+        move: classifyFormula(tag),
+        ele: tag.ele,
+        reaction: tag.trans,
+      })
     } catch {
       // Some formulas need conditional buffs we haven't set — skip silently
     }
@@ -273,8 +303,25 @@ export function computeTeamViaGo(
     goKey: focusGoKey,
     fed: { weapon: focusFedWeapon, artifacts: focusFedArtifacts },
     values,
+    formulas,
     teamKeys,
   }
+}
+
+/** Bucket a formula's tag into a UI-friendly move category. */
+function classifyFormula(tag: { q?: string; move?: string; trans?: string }): FormulaMove {
+  if (tag.q === 'trans') return 'reaction'
+  if (tag.move === 'normal') return 'normal'
+  if (tag.move === 'charged') return 'charged'
+  if (tag.move === 'plunging') return 'plunging'
+  if (tag.move === 'skill') return 'skill'
+  if (tag.move === 'burst') return 'burst'
+  // Panel stats (hp/atk/def/eleMas/cappedCritRate_/critDMG_/dmg_/heal_) have
+  // qt='final' or qt='common' and no 'move', so they fall through to 'other'.
+  // We tag them 'panel' so the UI can group them at the top.
+  const PANEL_QS = new Set(['hp', 'atk', 'def', 'eleMas', 'enerRech_', 'cappedCritRate_', 'critDMG_', 'dmg_', 'heal_'])
+  if (tag.q && PANEL_QS.has(tag.q)) return 'panel'
+  return 'other'
 }
 
 /** Single-character compute — kept for backwards compat with the substat
@@ -375,7 +422,14 @@ export function computeSubstatMarginsViaGo(
   // Get baseline
   const baseline = computeTeamViaGo(members, focus, teamOpts)
   if (!baseline) return null
-  const main = pickMainFormula(baseline.values)
+  // Use the explicit target formula if the caller specified one; otherwise
+  // fall back to auto-picking the "main damage" formula. Either way we need
+  // a formula whose value is positive in the baseline so the delta is meaningful.
+  let main: { name: string; value: number } | null = null
+  if (teamOpts.targetFormula && baseline.values[teamOpts.targetFormula] != null) {
+    main = { name: teamOpts.targetFormula, value: baseline.values[teamOpts.targetFormula] }
+  }
+  if (!main || main.value <= 0) main = pickMainFormula(baseline.values)
   if (!main) return null
 
   const margins: SubstatMargin[] = []
@@ -520,6 +574,9 @@ function computeTeamViaGoWithExtraStat(
     goKey: focusGoKey,
     fed: { weapon: focusFedWeapon, artifacts: focusFedArtifacts },
     values,
+    // Substat-perturbation compute doesn't need the full per-formula tag
+    // metadata — pickMainFormula and the margin loop both just read .values.
+    formulas: [],
     teamKeys,
   }
 }

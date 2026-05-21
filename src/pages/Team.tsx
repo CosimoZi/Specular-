@@ -87,6 +87,11 @@ export default function Team() {
     baselineValue: number
     margins: SubstatMargin[]
   } | null>(null)
+  // Which formula the substat-margin panel computes deltas against. User can
+  // pin one via 📌 in the damage panel. Reset on focus change so we don't
+  // hold a name that no longer exists on the new character.
+  const [pinnedFormula, setPinnedFormula] = useState<string | null>(null)
+  useEffect(() => { setPinnedFormula(null) }, [focusCharId])
   // Stable string key for the full team's config (so a child's build edit
   // re-runs GO compute, not just slot changes).
   const teamConfigsKey = useMemo(() => {
@@ -119,13 +124,19 @@ export default function Team() {
         condState: team.condState,
       }
       setGoResult(computeTeamViaGo(members, focusIdx, opts))
-      setGoMargins(computeSubstatMarginsViaGo(members, focusIdx, opts))
+      setGoMargins(
+        computeSubstatMarginsViaGo(members, focusIdx, {
+          ...opts,
+          targetFormula: pinnedFormula ?? undefined,
+        }),
+      )
     })
     return () => { cancelled = true }
     // teamConfigsKey + condStateKey + enemy* together cover every input to the
-    // GO call — using them as the dep list keeps this stable across re-renders.
+    // GO call. pinnedFormula is included so changing the substat target
+    // re-runs the margin compute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusIdx, teamConfigsKey, condStateKey, team.enemyLevel, team.enemyBaseRes])
+  }, [focusIdx, teamConfigsKey, condStateKey, team.enemyLevel, team.enemyBaseRes, pinnedFormula])
 
   const configuredCharacters = useMemo(
     () => allCharacters.filter((c) => isConfigured(configsMap[String(c.id)])),
@@ -160,12 +171,11 @@ export default function Team() {
 
       <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 space-y-2">
         <h3 className="text-sm font-semibold">{t('team.enemyAndReaction')}</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
           <NumberCell label={t('enemy.level')} value={team.enemyLevel} step={5} onChange={(v) => teamPatch({ enemyLevel: v })} />
           <NumberCell label={t('enemy.baseRes')} value={team.enemyBaseRes} step={5} onChange={(v) => teamPatch({ enemyBaseRes: v })} />
-          <NumberCell label={t('enemy.resReduction')} value={team.enemyResReduction} step={5} onChange={(v) => teamPatch({ enemyResReduction: v })} />
-          <NumberCell label={t('enemy.defReduction')} value={team.enemyDefReduction} step={5} onChange={(v) => teamPatch({ enemyDefReduction: v })} />
         </div>
+        <p className="text-[10px] text-zinc-500 leading-snug">{t('enemy.shredHint')}</p>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-zinc-500">{t('reaction.label')}</span>
           <select
@@ -197,8 +207,15 @@ export default function Team() {
         onChange={(slotIdx, sheet, condName, value) => setCond(slotIdx, sheet, condName, value)}
       />
 
-      {goResult && <GoPandoPanel result={goResult} />}
-      {goMargins && <GoSubstatPanel data={goMargins} />}
+      {goResult && (
+        <GoPandoPanel
+          result={goResult}
+          pinnedFormula={pinnedFormula}
+          onPinFormula={setPinnedFormula}
+          t={t}
+        />
+      )}
+      {goMargins && <GoSubstatPanel data={goMargins} t={t} />}
 
       {!focusCharId && (
         <p className="text-sm text-zinc-500">{t('team.pickToBegin')}</p>
@@ -695,35 +712,151 @@ function FinalStat({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** Categorize GO formula keys for friendly display. */
-const PANEL_KEYS = new Set([
-  'hp', 'atk', 'def', 'eleMas', 'enerRech_',
-  'cappedCritRate_', 'critDMG_', 'dmg_', 'heal_',
-])
-const REACTION_KEYS = new Set([
-  'overloaded', 'shattered', 'electrocharged', 'superconduct', 'swirl',
-  'burning', 'bloom', 'hyperbloom', 'burgeon',
-  'lunarcharged', 'lunarbloom', 'lunarcrystallize',
-])
+// ============================================================================
+// Output panels — focus-character stats + per-talent damage + substat margins
+// ============================================================================
 
-function formatGoValue(key: string, v: number): string {
-  if (PANEL_KEYS.has(key)) {
-    // Percent stats stored as decimals → show as %
-    if (key.endsWith('_')) return `${(v * 100).toFixed(1)}%`
-    return Math.round(v).toLocaleString()
-  }
-  // Damage / reaction numbers
-  return Math.round(v).toLocaleString()
-}
-
+const PANEL_ORDER = ['hp', 'atk', 'def', 'eleMas', 'cappedCritRate_', 'critDMG_', 'enerRech_', 'dmg_', 'heal_']
 const PANEL_LABELS: Record<string, string> = {
   hp: 'HP', atk: 'ATK', def: 'DEF', eleMas: 'EM',
   enerRech_: 'ER', cappedCritRate_: 'CR', critDMG_: 'CD',
   dmg_: 'DMG%', heal_: 'Healing',
 }
+function formatPanelValue(k: string, v: number): string {
+  if (k.endsWith('_')) return `${(v * 100).toFixed(1)}%`
+  return Math.round(v).toLocaleString()
+}
 
-function GoSubstatPanel({ data }: {
+const MOVE_GROUP_ORDER: Array<{ key: GoComputeResult['formulas'][number]['move']; labelKey: string }> = [
+  { key: 'normal', labelKey: 'damage.group.normal' },
+  { key: 'charged', labelKey: 'damage.group.charged' },
+  { key: 'plunging', labelKey: 'damage.group.plunging' },
+  { key: 'skill', labelKey: 'damage.group.skill' },
+  { key: 'burst', labelKey: 'damage.group.burst' },
+  { key: 'reaction', labelKey: 'damage.group.reaction' },
+  { key: 'other', labelKey: 'damage.group.other' },
+]
+
+/** Focus-character stats + per-move damage breakdown. Each move group is
+ *  collapsible. Clicking 📌 on a formula pins it as the substat-margin target. */
+function GoPandoPanel({
+  result, pinnedFormula, onPinFormula, t,
+}: {
+  result: GoComputeResult
+  pinnedFormula: string | null
+  onPinFormula: (name: string | null) => void
+  t: (k: string, f?: string) => string
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(['skill', 'burst', 'reaction']),
+  )
+  const toggleGroup = (k: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+
+  const panelEntries: Array<{ name: string; value: number }> = []
+  const byMove: Record<string, GoComputeResult['formulas']> = {}
+  for (const f of result.formulas) {
+    if (f.move === 'panel') {
+      panelEntries.push({ name: f.name, value: f.value })
+    } else {
+      ;(byMove[f.move] ||= []).push(f)
+    }
+  }
+  panelEntries.sort((a, b) => PANEL_ORDER.indexOf(a.name) - PANEL_ORDER.indexOf(b.name))
+
+  return (
+    <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+      <h3 className="text-sm font-semibold px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-baseline">
+        <span>{t('damage.title')}</span>
+        <span className="ml-2 text-xs font-normal text-zinc-500">· {result.goKey}</span>
+        <span className="ml-auto text-xs font-normal text-zinc-500">
+          {result.fed.weapon ? '✓ ' + t('damage.fedWeapon') : '— ' + t('damage.noWeapon')} · {result.fed.artifacts}/5 {t('damage.fedArtifacts')}
+        </span>
+      </h3>
+      {/* Panel stats */}
+      <div className="px-4 py-3 grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm bg-zinc-50/40 dark:bg-zinc-900/40 border-b border-zinc-100 dark:border-zinc-800">
+        {panelEntries.map(({ name, value }) => (
+          <FinalStat
+            key={name}
+            label={PANEL_LABELS[name] ?? name}
+            value={formatPanelValue(name, value)}
+          />
+        ))}
+      </div>
+      {/* Per-move damage groups */}
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {MOVE_GROUP_ORDER.map(({ key, labelKey }) => {
+          const list = byMove[key]
+          if (!list || list.length === 0) return null
+          const isOpen = expanded.has(key)
+          const groupMax = Math.max(0, ...list.map((f) => f.value))
+          return (
+            <div key={key}>
+              <button
+                onClick={() => toggleGroup(key)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900/50 text-left"
+              >
+                <span className="text-zinc-400 w-3 text-center">{isOpen ? '▾' : '▸'}</span>
+                <span className="font-medium">{t(labelKey)}</span>
+                <span className="text-xs text-zinc-500">· {list.length}</span>
+                <span className="ml-auto text-xs text-zinc-500 tabular-nums">
+                  {key === 'reaction'
+                    ? t('damage.maxValue').replace('{v}', Math.round(groupMax).toLocaleString())
+                    : t('damage.peakHit').replace('{v}', Math.round(groupMax).toLocaleString())}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-4 pb-3">
+                  {list.map((f) => {
+                    const isPinned = pinnedFormula === f.name
+                    return (
+                      <div
+                        key={f.name}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm bg-white dark:bg-zinc-900 border ${
+                          isPinned
+                            ? 'border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400/30'
+                            : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      >
+                        <button
+                          onClick={() => onPinFormula(isPinned ? null : f.name)}
+                          title={isPinned ? t('damage.unpin') : t('damage.pinForSubstat')}
+                          className={`text-xs flex-shrink-0 ${
+                            isPinned
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                          }`}
+                        >
+                          {isPinned ? '📌' : '📍'}
+                        </button>
+                        <span className="text-zinc-600 dark:text-zinc-400 truncate flex-1">{f.name}</span>
+                        <span className="tabular-nums font-medium text-right flex-shrink-0">
+                          {Math.round(f.value).toLocaleString()}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-zinc-500 px-4 py-2 bg-zinc-50/40 dark:bg-zinc-900/40 border-t border-zinc-100 dark:border-zinc-800 leading-snug">
+        {t('damage.pinHint')}
+      </p>
+    </section>
+  )
+}
+
+function GoSubstatPanel({ data, t }: {
   data: { baselineFormula: string; baselineValue: number; margins: SubstatMargin[] }
+  t: (k: string, f?: string) => string
 }) {
   const positive = data.margins.filter((m) => m.absoluteDelta > 0)
   const maxAbs = positive[0]?.absoluteDelta ?? 1
@@ -742,9 +875,9 @@ function GoSubstatPanel({ data }: {
   return (
     <section className="border border-emerald-300 dark:border-emerald-800 rounded-lg overflow-hidden">
       <h3 className="text-sm font-semibold px-4 py-2 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-800 flex items-baseline">
-        <span>Substat marginal value (via GO Pando)</span>
+        <span>{t('substat.title')}</span>
         <span className="ml-auto text-xs font-normal text-zinc-500">
-          baseline: {data.baselineFormula} = {Math.round(data.baselineValue).toLocaleString()}
+          {t('substat.target')}: <span className="font-medium text-emerald-700 dark:text-emerald-400">{data.baselineFormula}</span> = {Math.round(data.baselineValue).toLocaleString()}
         </span>
       </h3>
       <table className="w-full text-sm">
@@ -773,67 +906,6 @@ function GoSubstatPanel({ data }: {
           })}
         </tbody>
       </table>
-    </section>
-  )
-}
-
-function GoPandoPanel({ result }: { result: GoComputeResult }) {
-  const entries = Object.entries(result.values).filter(([, v]) => Number.isFinite(v))
-  const panel: Array<[string, number]> = []
-  const reactions: Array<[string, number]> = []
-  const damage: Array<[string, number]> = []
-  for (const [k, v] of entries) {
-    if (PANEL_KEYS.has(k)) panel.push([k, v])
-    else if (REACTION_KEYS.has(k)) reactions.push([k, v])
-    else damage.push([k, v])
-  }
-  const PANEL_ORDER = ['hp', 'atk', 'def', 'eleMas', 'cappedCritRate_', 'critDMG_', 'enerRech_', 'dmg_', 'heal_']
-  panel.sort(([a], [b]) => PANEL_ORDER.indexOf(a) - PANEL_ORDER.indexOf(b))
-  damage.sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-  reactions.sort(([a], [b]) => a.localeCompare(b))
-
-  return (
-    <section className="border border-indigo-300 dark:border-indigo-800 rounded-lg overflow-hidden">
-      <h3 className="text-sm font-semibold px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 border-b border-indigo-200 dark:border-indigo-800 flex items-baseline">
-        <span>via GenshinOptimizer Pando · {result.goKey}</span>
-        <span className="ml-auto text-xs font-normal text-zinc-500">
-          {result.fed.weapon ? '✓ weapon' : '— no weapon'} · {result.fed.artifacts}/5 artifacts
-        </span>
-      </h3>
-      {/* Panel */}
-      <div className="px-4 py-3 grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm border-b border-indigo-100 dark:border-indigo-900/50">
-        {panel.map(([k, v]) => (
-          <FinalStat key={k} label={PANEL_LABELS[k] ?? k} value={formatGoValue(k, v)} />
-        ))}
-      </div>
-      {/* Damage per skill */}
-      {damage.length > 0 && (
-        <div className="px-4 py-3 border-b border-indigo-100 dark:border-indigo-900/50">
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Skill damage (avg)</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            {damage.map(([k, v]) => (
-              <div key={k} className="flex justify-between bg-white dark:bg-zinc-900 rounded px-2 py-1">
-                <span className="text-zinc-600 dark:text-zinc-400">{k}</span>
-                <span className="tabular-nums font-medium">{formatGoValue(k, v)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Reactions */}
-      {reactions.length > 0 && (
-        <div className="px-4 py-3">
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Transformative reactions (1 trigger)</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            {reactions.map(([k, v]) => (
-              <div key={k} className="flex justify-between bg-white dark:bg-zinc-900 rounded px-2 py-1">
-                <span className="text-zinc-600 dark:text-zinc-400">{k}</span>
-                <span className="tabular-nums">{formatGoValue(k, v)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </section>
   )
 }
