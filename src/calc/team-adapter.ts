@@ -135,8 +135,6 @@ export function computeTeamNew(
   // entries into a header row above the damage groups. Each panel entry
   // carries its per-source breakdown via `contributors`.
   const ct = (key: string) => r.contributions[key] ?? []
-  // critDMG_ removed from panel per user feedback — its information lives in
-  // the damage rows already (each row shows 期望 + 暴 + 未暴, which embeds CD).
   const panel: ComputedFormula[] = [
     { name: 'hp', value: r.panel.finalHp, move: 'panel', contributors: ct('hp') },
     { name: 'atk', value: r.panel.finalAtk, move: 'panel', contributors: ct('atk') },
@@ -144,6 +142,7 @@ export function computeTeamNew(
     { name: 'eleMas', value: r.panel.eleMas, move: 'panel', contributors: ct('eleMas') },
     { name: 'enerRech_', value: r.panel.enerRech_, move: 'panel', contributors: ct('enerRech_') },
     { name: 'cappedCritRate_', value: r.panel.cappedCritRate_, move: 'panel', contributors: ct('cappedCritRate_') },
+    { name: 'critDMG_', value: r.panel.critDMG_, move: 'panel', contributors: ct('critDMG_') },
   ]
   // DMG bonus — only the character's own element (+ physical if non-zero, for
   // polearm/sword/claymore/bow characters whose normals are physical).

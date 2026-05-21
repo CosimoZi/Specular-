@@ -1080,9 +1080,9 @@ function GoPandoPanel({
                             if (ff.crit == null || ff.nonCrit == null) return null
                             return (
                               <div className="text-[10px] tabular-nums text-zinc-500">
-                                <span title="暴击">暴 {Math.round(ff.crit).toLocaleString()}</span>
+                                <span>{t('damage.crit')} {Math.round(ff.crit).toLocaleString()}</span>
                                 <span className="mx-1 text-zinc-300 dark:text-zinc-700">|</span>
-                                <span title="未暴击">未暴 {Math.round(ff.nonCrit).toLocaleString()}</span>
+                                <span>{t('damage.nonCrit')} {Math.round(ff.nonCrit).toLocaleString()}</span>
                               </div>
                             )
                           })()}
@@ -1109,17 +1109,23 @@ function GoSubstatPanel({ data, t }: {
 }) {
   const positive = data.margins.filter((m) => m.absoluteDelta > 0)
   const maxAbs = positive[0]?.absoluteDelta ?? 1
-  const SUBSTAT_LABEL: Record<string, string> = {
-    critRate_: 'CR (+3.89%)',
-    critDMG_: 'CD (+7.77%)',
-    atk_: 'ATK % (+5.83%)',
-    hp_: 'HP % (+5.83%)',
-    def_: 'DEF % (+7.29%)',
-    eleMas: 'EM (+23.31)',
-    enerRech_: 'ER (+6.48%)',
-    atk: 'Flat ATK (+19.45)',
-    hp: 'Flat HP (+298.75)',
-    def: 'Flat DEF (+23.15)',
+  // GO substat key -> our dict key. Dict provides locale-aware label with
+  // the canonical max-tier roll value baked in.
+  const SUBSTAT_DICT: Record<string, string> = {
+    critRate_: 'substat.critRate',
+    critDMG_: 'substat.critDmg',
+    atk_: 'substat.atkPct',
+    hp_: 'substat.hpPct',
+    def_: 'substat.defPct',
+    eleMas: 'substat.em',
+    enerRech_: 'substat.er',
+    atk: 'substat.atkFlat',
+    hp: 'substat.hpFlat',
+    def: 'substat.defFlat',
+  }
+  const substatLabel = (k: string) => {
+    const dictKey = SUBSTAT_DICT[k]
+    return dictKey ? t(dictKey) : k
   }
   return (
     <section className="border border-emerald-300 dark:border-emerald-800 rounded-lg overflow-hidden">
@@ -1135,7 +1141,7 @@ function GoSubstatPanel({ data, t }: {
             const width = m.absoluteDelta > 0 ? (m.absoluteDelta / maxAbs) * 100 : 0
             return (
               <tr key={m.substat} className="border-t border-emerald-100 dark:border-emerald-900/50">
-                <td className="px-4 py-2 w-44">{SUBSTAT_LABEL[m.substat] ?? m.substat}</td>
+                <td className="px-4 py-2 w-44">{substatLabel(m.substat)}</td>
                 <td className="px-2 py-2">
                   <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
                     <div
