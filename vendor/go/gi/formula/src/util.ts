@@ -53,10 +53,8 @@ export function charData(data: ICharacter): TagMapNodeEntries {
 
 export function weaponData(data: IWeapon): TagMapNodeEntries {
   const { lvl, ascension, refinement } = own.weapon
-
   return [
     reader.sheet('agg').reread(reader.sheet(data.key)),
-
     lvl.add(data.level),
     ascension.add(data.ascension),
     refinement.add(data.refinement),
