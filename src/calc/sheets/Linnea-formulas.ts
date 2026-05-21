@@ -54,19 +54,20 @@ export function applyLinneaFormulaBuffs(
   _condState: Record<string, Record<string, number>>,
 ) {
   const ascension = scope.get('ascension') ?? 0
-  // A6 (ascension 6): per 100 DEF, +0.7% moon-reaction base damage, cap +14%.
-  // 反应提升 — accumulates into premod.moonReactionBoost which the moon-reaction
-  // formula evaluator reads alongside 精通增益.
+  // A6 月兆祝赐: per 100 DEF, +0.7% moon-reaction BASE damage (cap +14%).
+  // "基础伤害" = 基础提升% slot (multiplies the trans_base × 1.6 term inside
+  // the base bracket, alongside Linnea C1's flat add).
   if (ascension >= 6) {
     const def = scope.get('final.def') ?? 0
     const boost = Math.min(0.14, (def / 100) * 0.007)
     if (boost > 0) {
-      scope.add('premod.moonReactionBoost', boost, `A6 月兆祝赐(DEF ${Math.round(def)} → +${(boost * 100).toFixed(1)}% 月反应增伤)`)
+      scope.add('premod.moonReactionBaseBoost', boost, `A6 月兆祝赐(DEF ${Math.round(def)} → +${(boost * 100).toFixed(1)}% 月反应基础)`)
     }
   }
-  // C6: 月结晶反应 +25% damage. Modeled as reaction-boost.
+  // C6: "队伍中附近的角色造成的月结晶反应伤害擢升25%". 擢升 = separate final
+  // multiplier slot (outside the EM/dmg-boost bracket).
   if ((scope.get('constellation') ?? 0) >= 6) {
-    scope.add('premod.moonReactionBoost', 0.25, 'C6 黄金猎犬之梦(月结晶 +25%)')
+    scope.add('premod.moonReactionElevation', 0.25, 'C6 黄金猎犬之梦(月结晶 擢升 25%)')
   }
 }
 

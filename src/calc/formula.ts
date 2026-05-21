@@ -24,17 +24,18 @@ export type CritMode = 'off' | 'on' | 'avg'
  *  - 'standard': `(atk × mult) × (1 + dmg_<ele> + dmg_<move>) × crit × def × res`
  *    The default — talent attacks, charged shots, plunge.
  *
- *  - 'reactionMoon': transformative-form moon reaction (月感电 / 月绽放 /
- *     月结晶 from passives, where damage doesn't carry HP/ATK and is shared
- *     across team).
- *     `(transformativeBase[lvl] × 1.8 + flatAdd) × (1 + 精通增益 + reactionBoost)
- *      × crit × res` (no DEF mitigation since transformatives ignore enemy DEF;
- *     no element-DMG-bonus since moon reactions don't take it).
+ *  - 'reactionMoon' / 'directMoon': moon-reaction formulas per 月白姬君's
+ *     community reference. The full expression is:
  *
- *  - 'directMoon': direct-form moon reaction (倍率月反应) — character's skill
- *     deals moon-reaction damage scaled by a main stat × multiplier.
- *     `(3 × mainStat × mult + flatAdd) × (1 + 精通增益 + reactionBoost) ×
- *      crit × res` — no DEF mitigation, no element-DMG-bonus. */
+ *     [transformativeBase × 1.6 (reactionMoon)  OR  3 × mainStat × mult (directMoon)]
+ *       × (1 + 基础提升%)                              ← premod.moonReactionBaseBoost
+ *       + flatAddFromBaseAst                          ← from `def.base` AST (e.g. Linnea C1)
+ *     × (1 + 精通增益 + 月反应增伤%)                    ← premod.moonReactionDmgBoost
+ *     × 抗性系数                                       ← enemy preRes (defMulti=1 — perforates DEF)
+ *     × 暴击区                                         ← (1 + CR × CDmg)
+ *     × (1 + 擢升)                                     ← premod.moonReactionElevation
+ *
+ *     No element-DMG-bonus, no enemy-DEF mitigation. */
 export type FormulaKind = 'standard' | 'reactionMoon' | 'directMoon'
 
 export interface FormulaDef {
@@ -107,6 +108,7 @@ export function evaluateFormula(def: FormulaDef, ctx: FormulaContext): FormulaRe
   let base: number
   let dmgBonus: number
   let defMulti: number
+  let elevation = 0 // 擢升 — final multiplier, only used for moon reactions
 
   if (kind === 'standard') {
     // base = atk × mult (from baseExpr); + dmg_<ele> + dmg_<move> bonus; + DEF mitigation
@@ -118,26 +120,29 @@ export function evaluateFormula(def: FormulaDef, ctx: FormulaContext): FormulaRe
     const enemyPart = (enemy.level + 100) * (1 - (enemy.defRed ?? 0) - (enemy.defIgn ?? 0))
     defMulti = charPart / (charPart + enemyPart)
   } else {
-    // Moon reactions — share the (1 + 精通增益 + 反应提升) bonus, no element DMG
-    // bonus, no enemy DEF mitigation (transformative reactions perforate DEF).
+    // Moon reactions. No element DMG bonus, no enemy DEF mitigation.
+    const baseBoost = scope.get('premod.moonReactionBaseBoost') ?? 0  // 基础提升%
+    const dmgBoost = scope.get('premod.moonReactionDmgBoost') ?? 0    // 月反应增伤% (next to EM)
+    elevation = scope.get('premod.moonReactionElevation') ?? 0        // 擢升 (final multiplier)
     const em = scope.get('final.eleMas') ?? 0
     const emBonus = (6 * em) / (em + 2000) // 精通增益
-    const reactionBoost = scope.get('premod.moonReactionBoost') ?? 0
-    dmgBonus = 1 + emBonus + reactionBoost
+
+    dmgBonus = 1 + emBonus + dmgBoost
     defMulti = 1
 
     if (kind === 'reactionMoon') {
-      // base = (transformative_level_base × 1.8) + flatAdd (from baseExpr)
       const levelBase = TRANSFORMATIVE_REACTION_BASE[Math.floor(charLevel)] ?? 0
-      base = levelBase * MOON_REACTION_REACTION_COEFF + baseExpr
+      base = levelBase * MOON_REACTION_REACTION_COEFF * (1 + baseBoost) + baseExpr
     } else {
-      // directMoon: base = 3 × (mainStat × mult from baseExpr) + (no flat)
-      // baseExpr is expected to encode `mainStat × multiplier` already.
-      base = MOON_REACTION_DIRECT_COEFF * baseExpr
+      // directMoon: 3 × main_stat × multiplier (from baseExpr) × (1 + baseBoost) + flat
+      // baseExpr is expected to encode `mainStat × multiplier`. We multiply by
+      // 3 and by (1 + baseBoost) here. Flat adds aren't standard for direct
+      // moon yet — drop in if needed via a separate scope slot.
+      base = MOON_REACTION_DIRECT_COEFF * baseExpr * (1 + baseBoost)
     }
   }
 
-  const preCrit = base * dmgBonus * defMulti * resMulti
+  const preCrit = base * dmgBonus * defMulti * resMulti * (1 + elevation)
   const value = preCrit * critMultiHeadline
   const nonCrit = preCrit * critMultiNonCrit
   const crit = preCrit * critMultiCrit
