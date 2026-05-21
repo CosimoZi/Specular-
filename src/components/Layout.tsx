@@ -10,7 +10,6 @@ export default function Layout() {
   const navItems: Array<{ to: string; key: string; end?: boolean }> = [
     { to: '/', key: 'nav.home', end: true },
     { to: '/characters', key: 'nav.characters' },
-    { to: '/substat', key: 'nav.substat' },
     { to: '/team', key: 'nav.team' },
     { to: '/uid', key: 'nav.uid' },
   ]

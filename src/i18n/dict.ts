@@ -18,7 +18,6 @@ export const DICT: Record<Locale, Record<string, string>> = {
 
     'nav.home': '首页',
     'nav.characters': '角色',
-    'nav.substat': '词条评估',
     'nav.team': '配队伤害',
     'nav.uid': 'UID 导入',
 
@@ -26,15 +25,12 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'home.recentCharacters': '最新角色',
     'home.charactersTotal': '名收录',
 
-    'feature.singleChar.title': '单角色伤害计算',
+    'feature.singleChar.title': '角色配置 · 单角色伤害',
     'feature.singleChar.desc':
-      '从角色列表选一个，输入面板 + 反应 → 每个技能的非暴击/暴击/期望伤害。',
-    'feature.substat.title': '圣遗物词条评估',
-    'feature.substat.desc':
-      '基于你的角色配置，给出每条副词条的边际收益排序。月反应角色支持月感电/月绽放/月结晶专用公式。',
-    'feature.team.title': '配队总伤害',
+      '从角色列表选一个，配置等级 / 武器 / 圣遗物 / 命之座 / 天赋。每个技能直接给出非暴击 / 暴击 / 期望伤害。',
+    'feature.team.title': '配队伤害 · 词条边际分析',
     'feature.team.desc':
-      '最多 4 人配队，模拟一个轮转周期内的总输出，自动考虑共鸣、增益、减抗。',
+      '最多 4 人配队，自动叠加共鸣 / 队友 buff / 减抗。在完整 buff 上下文里看每个副词条的真实边际收益（隔离的单角色面板会低估辅助型词条的价值）。',
     'feature.uid.title': 'UID 一键导入',
     'feature.uid.desc':
       '通过 Enka.Network 公开 API 拉取你的角色面板与圣遗物，直接喂给计算器。',
@@ -323,7 +319,6 @@ export const DICT: Record<Locale, Record<string, string>> = {
 
     'nav.home': 'Home',
     'nav.characters': 'Characters',
-    'nav.substat': 'Substats',
     'nav.team': 'Team DPS',
     'nav.uid': 'UID Import',
 
@@ -331,15 +326,12 @@ export const DICT: Record<Locale, Record<string, string>> = {
     'home.recentCharacters': 'Recent Characters',
     'home.charactersTotal': 'in DB',
 
-    'feature.singleChar.title': 'Single-character damage',
+    'feature.singleChar.title': 'Character config · single-character damage',
     'feature.singleChar.desc':
-      'Pick a character, enter stats + reaction → per-skill non-crit / crit / average damage.',
-    'feature.substat.title': 'Substat valuation',
-    'feature.substat.desc':
-      'Given your build, sort substats by marginal damage gain. Lunar-reaction characters use the lunar electro/bloom/crystallize formulas.',
-    'feature.team.title': 'Team DPS',
+      'Pick a character; configure level / weapon / artifacts / constellation / talents. Each skill shows non-crit / crit / average damage directly.',
+    'feature.team.title': 'Team DPS · substat margin in context',
     'feature.team.desc':
-      'Up to 4 characters; simulates one rotation cycle with resonance, buffs, and res-shred.',
+      'Up to 4 characters. Resonance + teammate buffs + res-shred apply automatically. The substat marginal-value table reflects the FULL buff context — solo-character panels under-value support stats.',
     'feature.uid.title': 'UID one-click import',
     'feature.uid.desc':
       'Pull your character profile + artifacts from the Enka.Network public API straight into the calculator.',

@@ -10,7 +10,6 @@ export default function Home() {
   const latest = all.slice(0, 12)
   const features = [
     { to: '/characters', title: t('feature.singleChar.title'), desc: t('feature.singleChar.desc') },
-    { to: '/substat', title: t('feature.substat.title'), desc: t('feature.substat.desc') },
     { to: '/team', title: t('feature.team.title'), desc: t('feature.team.desc') },
     { to: '/uid', title: t('feature.uid.title'), desc: t('feature.uid.desc') },
   ]
