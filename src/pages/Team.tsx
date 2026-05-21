@@ -386,12 +386,15 @@ function CondSection({
                             b.condName && goKey
                               ? charConds[goKey]?.[b.condName] ?? 0
                               : 0
+                          const sourceCfg = configsMap[String(charId)]
+                          const computedValue = b.valueAt && sourceCfg ? b.valueAt(sourceCfg) : undefined
                           return (
                             <BuffRowStructured
                               key={`${gi}-${bi}`}
                               buff={b}
                               cond={condMeta}
                               value={val}
+                              computedValue={computedValue}
                               locale={locale}
                               onChange={(v) => {
                                 if (b.condName && goKey) {
@@ -470,24 +473,34 @@ function sourceHeaderClass(type: BuffSourceType): string {
 
 /** Structured buff row: name + effect copy, plus a toggle / number input for
  *  the underlying cond when one is present. Always-on buffs (no cond) render
- *  with just an "✓ 常驻" indicator. */
+ *  with just an "✓ 常驻" indicator. If the buff descriptor provided a
+ *  computed value (from valueAt), it renders below the effect text. */
 function BuffRowStructured({
-  buff, cond, value, locale, onChange,
+  buff, cond, value, computedValue, locale, onChange,
 }: {
   buff: BuffEntry
   cond?: CondInfo
   value: number
+  computedValue?: { zh: string; en: string }
   locale: 'zh' | 'en'
   onChange: (v: number) => void
 }) {
+  const body = (
+    <div className="flex-1 min-w-0">
+      <div className="font-medium">{buff.name[locale]}</div>
+      <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
+      {computedValue && (
+        <div className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5 font-medium tabular-nums">
+          {computedValue[locale]}
+        </div>
+      )}
+    </div>
+  )
   if (!cond) {
     return (
       <div className="px-3 py-2 flex items-start gap-3 text-sm">
         <span className="text-emerald-600 dark:text-emerald-400 text-xs mt-0.5">✓ 常驻</span>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium">{buff.name[locale]}</div>
-          <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
-        </div>
+        {body}
       </div>
     )
   }
@@ -500,10 +513,7 @@ function BuffRowStructured({
           onChange={(e) => onChange(e.target.checked ? 1 : 0)}
           className="mt-1 cursor-pointer flex-shrink-0"
         />
-        <div className="flex-1 min-w-0">
-          <div className="font-medium">{buff.name[locale]}</div>
-          <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
-        </div>
+        {body}
       </label>
     )
   }
@@ -530,16 +540,18 @@ function BuffRowStructured({
             )}
           </div>
           <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
+          {computedValue && (
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5 font-medium tabular-nums">
+              {computedValue[locale]}
+            </div>
+          )}
         </div>
       </div>
     )
   }
   // 'list' fallback
   return (
-    <div className="px-3 py-2 text-sm">
-      <div className="font-medium">{buff.name[locale]}</div>
-      <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
-    </div>
+    <div className="px-3 py-2 text-sm">{body}</div>
   )
 }
 

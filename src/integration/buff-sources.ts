@@ -9,12 +9,20 @@
 //   one buff entry has:
 //     - source       (skill / burst / passive1 / passive2 / constellation / weapon / artifact)
 //     - sourceLabel  (full localized name of the talent or constellation)
-//     - effect       (what the buff does, in human terms + numeric value)
+//     - effect       (text description of what the buff does)
+//     - valueAt?     (function returning the *numeric* value at the user's
+//                     current build — e.g. Q RES shred is 6% at lv 1 and
+//                     10% at lv 13. The UI calls this with the source
+//                     character's CharacterConfig so the displayed number
+//                     matches what the engine actually computes.)
 //     - condName     (which Pando cond gates this buff; multiple buffs may share)
 //
 // Multiple buffs can share a condName (e.g. Shenhe A1 + C2 + Q RES shred all
 // fire when burstField=1). The UI renders one cond toggle and groups the
 // shared buffs under it.
+
+import type { CharacterConfig } from '@/data/config-types'
+import { talentValue } from './talent-values'
 
 export type BuffSourceType =
   | 'normal'
@@ -41,8 +49,15 @@ export interface BuffEntry {
   source: BuffSource
   /** Short name of the buff itself (e.g. "冰翎附加冰伤"). */
   name: { zh: string; en: string }
-  /** What it does, in human terms, with current-build numeric values. */
+  /** What it does, in plain text — no specific numbers if the value is
+   *  talent-leveled. The actual number gets injected via valueAt when
+   *  present. */
   effect: { zh: string; en: string }
+  /** Compute the buff's numeric value at the user's current build for
+   *  display. Returns a localized formatted string (e.g. "-10.0%" or
+   *  "+97.0% × ATK"). Omit for buffs with no value to display, or for
+   *  constants where the effect text already contains the number. */
+  valueAt?: (cfg: CharacterConfig) => { zh: string; en: string }
   /** Pando cond name that gates this buff. Omit for always-on buffs. */
   condName?: string
 }
@@ -53,6 +68,17 @@ export type CharacterBuffDescriptor = ReadonlyArray<BuffEntry>
 // =============================================================================
 // Shenhe (申鹤)
 // =============================================================================
+// Param-table indices, copied from Shenhe.ts dm constants:
+//   skill[2] = quill ATK% per consumption (talent-leveled, 15 entries)
+//   burst[1] = cryo+phys RES shred magnitude (talent-leveled, 15 entries)
+//   passive1[0][0] = A1 cryo dmg constant (0.15)
+//   passive2[0][0] = A4 press dmg constant (0.15)
+//   passive2[2][0] = A4 hold dmg constant (0.15)
+//   constellation4[0] = C4 dmg per stack (0.05)
+function fmtPct(decimal: number, sign: '+' | '-' | ''): { zh: string; en: string } {
+  const v = (Math.abs(decimal) * 100).toFixed(1)
+  return { zh: `${sign}${v}%`, en: `${sign}${v}%` }
+}
 export const SHENHE_BUFFS: CharacterBuffDescriptor = [
   {
     source: {
@@ -61,8 +87,15 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰翎附加冰伤', en: 'Icy Quill flat cryo damage' },
     effect: {
-      zh: '每次队友冰伤触发，追加伤害 = 申鹤 ATK × E 天赋表系数（满级 ≈ 97%）',
-      en: 'Each ally cryo hit consumes one quill: +(Shenhe ATK × skill-table coef) flat cryo damage',
+      zh: '每次队友冰伤触发，追加 = 申鹤 ATK × E 天赋表系数',
+      en: 'Each ally cryo hit consumes one quill: +(Shenhe ATK × skill coef)',
+    },
+    valueAt: (c) => {
+      const v = talentValue('Shenhe', 'skill', 2, c.talentLevels.skill)
+      return {
+        zh: `当前: 每次 +${(v * 100).toFixed(1)}% × ATK（E lv.${c.talentLevels.skill}）`,
+        en: `Now: +${(v * 100).toFixed(1)}% × ATK per quill (E lv.${c.talentLevels.skill})`,
+      }
     },
     condName: 'quillActive',
   },
@@ -73,8 +106,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰元素伤害加成', en: 'Cryo DMG bonus' },
     effect: {
-      zh: 'Q 场内单挂角色 +15% 冰元素伤害',
-      en: 'Active character inside Q field: +15% Cryo DMG',
+      zh: 'Q 场内单挂角色 +15% 冰元素伤害（固定值）',
+      en: 'Active char in Q field: +15% Cryo DMG (constant)',
     },
     condName: 'burstField',
   },
@@ -85,8 +118,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: 'a. 点按 E 后', en: 'a. After tap E' },
     effect: {
-      zh: '全队元素战技 + 元素爆发伤害 +15%（10s）',
-      en: 'Team skill + burst DMG +15% (10s window)',
+      zh: '全队元素战技 + 元素爆发伤害 +15%（10s，固定值）',
+      en: 'Team skill + burst DMG +15% (10s, constant)',
     },
     condName: 'a4Press',
   },
@@ -97,8 +130,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: 'b. 长按 E 后', en: 'b. After hold E' },
     effect: {
-      zh: '全队普通攻击 + 重击 + 下落攻击伤害 +15%（15s）',
-      en: 'Team normal + charged + plunging DMG +15% (15s window)',
+      zh: '全队普通攻击 + 重击 + 下落攻击伤害 +15%（15s，固定值）',
+      en: 'Team normal + charged + plunging DMG +15% (15s, constant)',
     },
     condName: 'a4Hold',
   },
@@ -110,8 +143,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰元素暴击伤害', en: 'Cryo CRIT DMG' },
     effect: {
-      zh: 'Q 场内单挂角色 +15% 冰元素暴击伤害（与 A1 共用 Q 场内触发）',
-      en: 'Active character inside Q field: +15% cryo CRIT DMG (shares burst-field trigger with A1)',
+      zh: 'Q 场内单挂角色 +15% 冰元素暴击伤害（与 A1 共用 Q 场内触发，固定值）',
+      en: 'Active char in Q field: +15% cryo CRIT DMG (shares burst-field trigger; constant)',
     },
     condName: 'burstField',
   },
@@ -122,8 +155,16 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '场内敌人冰/物抗', en: 'Enemy cryo + physical RES shred' },
     effect: {
-      zh: 'Q 场内敌人冰元素抗性 -10% + 物理抗性 -10%',
-      en: 'Enemies inside Q field: -10% cryo RES + -10% physical RES',
+      zh: 'Q 场内敌人冰元素抗性 + 物理抗性 同时降低（数值随 Q 天赋等级提升）',
+      en: 'Enemies in Q field: cryo + physical RES shredded (scales with Q talent level)',
+    },
+    valueAt: (c) => {
+      const v = talentValue('Shenhe', 'burst', 1, c.talentLevels.burst)
+      return {
+        ...fmtPct(v, '-'),
+        zh: `当前: -${(v * 100).toFixed(1)}% 冰抗 / -${(v * 100).toFixed(1)}% 物抗（Q lv.${c.talentLevels.burst}）`,
+        en: `Now: -${(v * 100).toFixed(1)}% cryo / -${(v * 100).toFixed(1)}% phys RES (Q lv.${c.talentLevels.burst})`,
+      }
     },
     condName: 'burstField',
   },
@@ -135,8 +176,8 @@ export const SHENHE_BUFFS: CharacterBuffDescriptor = [
     },
     name: { zh: '冰翎层数', en: 'Icy Quill stack count' },
     effect: {
-      zh: '冰翎每被消耗 1 次，申鹤元素战技伤害 +5%，最多 50 层',
-      en: '+5% Shenhe skill DMG per Icy Quill consumed, max 50 stacks',
+      zh: '冰翎每被消耗 1 次，申鹤元素战技伤害 +5%，最多 50 层（固定值）',
+      en: '+5% Shenhe skill DMG per Icy Quill consumed, max 50 stacks (constant)',
     },
     condName: 'c4Stacks',
   },

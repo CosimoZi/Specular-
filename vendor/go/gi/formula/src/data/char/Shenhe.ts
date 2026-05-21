@@ -95,7 +95,7 @@ const dm = {
 const info = dataGenToCharInfo(data_gen)
 const {
   final,
-  char: { skill, ascension, constellation },
+  char: { skill, burst, ascension, constellation },
 } = own
 
 // Conditionals exposed to the UI (toggled in /team conditional buffs section).
@@ -159,8 +159,12 @@ const a4_hold_dmg_ = cmpGE(
   a4Hold.ifOn(percent(dm.passive2.hold_dmg_)),
 )
 
-// Q field cryo + physical RES shred on enemies inside the field.
-const burst_resShred_ = burstField.ifOn(percent(dm.burst.resShred_))
+// Q field cryo + physical RES shred on enemies inside the field. The shred
+// magnitude is a function of Q talent level (~6% at lv 1, ~10% at lv 13).
+// Subscript into the burst-talent table at the receiver's current Q level.
+const burst_resShred_ = burstField.ifOn(
+  percent(subscript(burst, dm.burst.resShred_)),
+)
 
 // C4 — every Icy Quill consumption stacks +dmg_% to Shenhe's own skill damage.
 //      Matches the old GO sheet's interpretation (in-game text is broader but
