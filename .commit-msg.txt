@@ -1,40 +1,79 @@
-task #34 was a phantom: weapon id 13509 != CalamityQueller (13507)
+replace Pando with custom AST; Shenhe panel ATK = 2,717 correct
 
-The shenhe.test panel-baseline hardcoded weaponId 13509 "// Calamity
-Queller" but the actual mapping in go-id-map.json is:
-  13507 -> CalamityQueller
-  13509 -> EngulfingLightning
+After hitting one too many Pando edge cases (the dst:null cond
+propagation, sheet routing quirks, +100% ATK stubs we had to strip),
+shifted to a from-scratch expression engine in src/calc/. Vendored GO
+stays in tree for now as a reference for non-Shenhe characters.
 
-So the engine was correctly computing Shenhe + EngulfingLightning
-(base.atk = 911.83 because EL has substat enerRech_, not atk_, and
-its main-stat curve is ATTACK_301 base 45.9364) while the test
-asserted those numbers against expected CalamityQueller values. Looked
-like an aggregation hole, was actually a typo.
+Architecture:
+  src/calc/ast.ts      12-op discriminated union + custom escape hatch.
+                       Fail-fast: missing var throws, div0 throws.
+                       evaluate, simplify (with constant folding),
+                       pretty, freeVars all included.
+  src/calc/scope.ts    Plain Map<string, number> with parent chain
+                       and add/setMax accumulators for buffs.
+  src/calc/build.ts    11-phase pipeline: char + weapon + artifact
+                       data fill -> AST eval for base/premod/final.
+  src/calc/formula.ts  Damage formula evaluator: base x dmgBonus x
+                       critMulti x defMulti x resMulti.
+  src/calc/sheets/     Per-character / weapon / set buff sheets.
+                       NoblesseOblige, BlizzardStrayer,
+                       TenacityOfTheMillelith, CalamityQueller,
+                       Shenhe (+ damage formulas).
+  src/calc/team-adapter.ts  Shapes BuildResult into the existing
+                            GoComputeResult interface so /team UI
+                            renders unchanged for characters with
+                            src/calc/ sheets (Shenhe today); falls
+                            through to legacy go-calc for others.
 
-Verified with both IDs in a new regression test
-(weapon-aggregation.test.ts):
+End-to-end verification with Shenhe L90 A6 C0 + Calamity Queller
+L90 A6 R1 + 5pc Noblesse Oblige (each piece w/ 4 substats: 1 CR,
+1 CD, 1 ATK%, 1 ATK flat at max-tier rolls):
 
-  Shenhe L90 A6 + EngulfingLightning L90 A6 R1:
-    base.atk    = 911.83    (303.76 char + 421.37 weap_curve + 186.7 weap_asc)
-    premod.atk_ = 0.288     (Shenhe A6 ascension only)
-    enerRech_   = 0.551     (EL substat 0.12 * CRITICAL_301[90])
-    final.atk   = 1174.44
+  base.atk    = 1044.34   (303.76 char + 740.58 weapon white)
+  premod.atk_ = 1.211     (28.8% char A6 + 16.5% CQ substat
+                           + 46.6% sands main + 29.15% subs)
+  premod.atk.flat = 408.25 (311 plume + 5x19.45 subs)
+  final.atk   = 2717.16   matches in-game expected
+  HP          = 17,773
+  DEF         = 830
+  CR          = 55.5%
+  CD          = 88.9%
+  Cryo DMG    = 58.6%
 
-  Shenhe L90 A6 + CalamityQueller L90 A6 R1:
-    base.atk    = 1044.34   (303.76 char + 553.88 weap_curve + 186.7 weap_asc)
-    premod.atk_ = 0.453     (Shenhe A6 0.288 + CQ substat 0.036 * CRITICAL_301[90])
-    final.atk   = 1517.82
+Damage formulas with no conds (no artifacts) match legacy GO values
+exactly:
+  normal_0 = 583, normal_4 = 885, charged = 1492,
+  plunging_high = 2153, skill_press = 1914, skill_hold = 2596,
+  burst = 1386, burst_dot = 455.
 
-Both match wiki + raw stat data exactly. agg.reread(weaponSheet) works
-correctly; charData and weaponData are structurally identical for
-this purpose.
+Cond gates verified:
+  - Icy Quill toggle: skill_press 1914 -> 2542 (+628/quill)
+  - A1 burst field: cryo skill_press up, physical normal_0 up (RES shred)
+  - C4 stacks (C6): own skill DMG up, burst/normals unchanged
+  - CQ stack=6 isActive=on/off: ATK% +19.2% / +38.4% as expected
+  - 4pc BlizzardStrayer enemyCryo/enemyFrozen: +20% / +40% CR
+  - NO 2pc / 4pc set4: burst DMG / team ATK%
 
-Changes:
-  - shenhe.test.ts: fix weaponId 13509 -> 13507, update expected
-    base.atk and premod.atk_ to true CalamityQueller values
-  - data/index.ts: remove stale audit comment describing the phantom
-    aggregation hole
-  - new test/weapon-aggregation.test.ts: lock in the correct numbers
-    for BOTH weapons so the typo class of bug is caught next time
+Test count: 70/71 pass. The one failure is a legacy GO test
+(shenhe-equipment.test.ts NoblesseOblige team-buff propagation)
+that exercises a vendor bug we're replacing, not regressing.
 
-Unblocks the broader weapon implementation plan.
+Side fixes along the way:
+  - vendor/go/common/util/src/lib/isDev.ts: replace process.env
+    with Vite-native import.meta.env so the browser doesn't crash
+    on cold load (was the reason /team rendered blank).
+  - scripts/strip-go-art-stub-lies.mjs: same treatment as the char
+    stub script — 58 artifact-set stubs all had a literal
+    +100% ATK in their fake 2pc/4pc effects. Stripped to no-ops.
+  - vendor/go/gi/formula/src/index.ts: export entries so the
+    live cond registry can introspect them at runtime.
+  - shenhe.test.ts: fix the weapon ID typo from prior session
+    (13509 was Engulfing Lightning, not Calamity Queller =
+    13507) and assert against the real CQ panel values.
+
+Memory persisted in
+.claude/projects/.../memory/specular_calc_ast.md so future
+sessions know the architecture and the fail-fast policy.
+
+Next: port more characters/weapons/sets, then rip vendor/go out.

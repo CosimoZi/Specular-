@@ -111,8 +111,13 @@ export default function Team() {
       return
     }
     let cancelled = false
-    import('@/integration/go-calc').then(({ computeTeamViaGo, computeSubstatMarginsViaGo }) => {
+    Promise.all([
+      import('@/integration/go-calc'),
+      import('@/calc/team-adapter'),
+    ]).then(([goMod, newMod]) => {
       if (cancelled) return
+      const { computeTeamViaGo, computeSubstatMarginsViaGo } = goMod
+      const { computeTeamNew, hasNewSheet } = newMod
       const members = team.slots.map((id) => {
         if (id == null) return null
         const cfg = configsMap[String(id)]
@@ -123,13 +128,30 @@ export default function Team() {
         enemyPreRes: team.enemyBaseRes / 100,
         condState: team.condState,
       }
-      setGoResult(computeTeamViaGo(members, focusIdx, opts))
-      setGoMargins(
-        computeSubstatMarginsViaGo(members, focusIdx, {
-          ...opts,
-          targetFormula: pinnedFormula ?? undefined,
-        }),
-      )
+      // Route through new pipeline for characters that have a src/calc sheet
+      // (Shenhe today). Fall back to legacy GO for everything else.
+      const focusCfg = focusConfig
+      if (focusCfg && hasNewSheet(focusCfg.characterId)) {
+        const r = computeTeamNew(members, focusIdx, opts)
+        // Adapt to GoComputeResult shape — both pipelines share the field names.
+        setGoResult(r as unknown as GoComputeResult)
+        // Substat margin compute still goes through GO for now; it's mainly a
+        // ranking signal so a small numeric discrepancy is acceptable.
+        setGoMargins(
+          computeSubstatMarginsViaGo(members, focusIdx, {
+            ...opts,
+            targetFormula: pinnedFormula ?? undefined,
+          }),
+        )
+      } else {
+        setGoResult(computeTeamViaGo(members, focusIdx, opts))
+        setGoMargins(
+          computeSubstatMarginsViaGo(members, focusIdx, {
+            ...opts,
+            targetFormula: pinnedFormula ?? undefined,
+          }),
+        )
+      }
     })
     return () => { cancelled = true }
     // teamConfigsKey + condStateKey + enemy* together cover every input to the

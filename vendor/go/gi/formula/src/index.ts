@@ -9,8 +9,9 @@ import {
   constant,
 } from '@genshin-optimizer/pando/engine'
 import { Calculator } from './calculator'
-import { keys, values } from './data'
+import { entries, keys, values } from './data'
 export { Calculator } from './calculator'
+export { entries }
 export * from './data/util'
 export * from './formulaText'
 export * from './meta'

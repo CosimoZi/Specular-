@@ -14,7 +14,6 @@ import {
   teamData,
   withMember,
   conditionalData,
-  conditionals as condRegistry,
   ownBuff,
   enemyDebuff,
   own,
@@ -24,6 +23,8 @@ import {
   type TagMapNodeEntries,
   genshinCalculatorWithEntries,
 } from '@genshin-optimizer/gi/formula'
+import { extractCondMetadata } from '@genshin-optimizer/game-opt/formula'
+import { entries as allEntries } from '@genshin-optimizer/gi/formula'
 import type { CharacterConfig } from '@/data/config-types'
 import {
   configToGoCharacter,
@@ -132,10 +133,19 @@ export interface CondInfo {
  *  done. Hide these from the UI; they don't actually buff anything. */
 const STUB_COND_NAMES = new Set(['someBoolConditional'])
 
+// Compute cond metadata from the live entries graph at module-load time.
+// vendor/go/gi/formula/src/meta.ts is a generator output that drifts every
+// time we touch a sheet — extractCondMetadata over the actual entries is
+// always in sync.
+const condRegistry = extractCondMetadata(
+  allEntries as Parameters<typeof extractCondMetadata>[0],
+  ({ sheet, q }) => ({ sheet: String(sheet), name: String(q) }),
+) as Record<string, Record<string, CondInfo>>
+
 /** List every conditional buff a given GO sheet (character/weapon/artifact)
  *  exposes. Filters out stub-only entries that don't actually wire to a buff. */
 export function listCondsForSheet(sheetKey: string): CondInfo[] {
-  const reg = (condRegistry as Record<string, Record<string, CondInfo>>)[sheetKey]
+  const reg = condRegistry[sheetKey]
   if (!reg) return []
   return Object.values(reg).filter((c) => !STUB_COND_NAMES.has(c.name))
 }
