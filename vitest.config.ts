@@ -18,7 +18,7 @@ export default defineConfig({
       '@genshin-optimizer/gi/good': path.resolve(__dirname, 'vendor/go/gi/good/src/index.ts'),
       '@genshin-optimizer/gi/formula': path.resolve(__dirname, 'vendor/go/gi/formula/src/index.ts'),
       '@genshin-optimizer/gi/sheets': path.resolve(__dirname, 'vendor/go/gi/sheets/src/index.ts'),
-      '@genshin-optimizer/gi/i18n': path.resolve(__dirname, 'vendor/go/gi/i18n/src/index.ts'),
+      '@genshin-optimizer/gi/i18n': path.resolve(__dirname, 'vendor/stubs/gi-i18n.ts'),
       '@genshin-optimizer/gi/svgicons': path.resolve(__dirname, 'vendor/go/gi/svgicons/src/index.ts'),
       '@genshin-optimizer/gi/uidata': path.resolve(__dirname, 'vendor/go/gi/uidata/src/index.ts'),
       '@genshin-optimizer/common/database': path.resolve(__dirname, 'vendor/go/common/database/src/index.ts'),

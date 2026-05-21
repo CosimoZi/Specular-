@@ -22,7 +22,7 @@
       "@genshin-optimizer/gi/good": ["./vendor/go/gi/good/src/index.ts"],
       "@genshin-optimizer/gi/formula": ["./vendor/go/gi/formula/src/index.ts"],
       "@genshin-optimizer/gi/sheets": ["./vendor/go/gi/sheets/src/index.ts"],
-      "@genshin-optimizer/gi/i18n": ["./vendor/go/gi/i18n/src/index.ts"],
+      "@genshin-optimizer/gi/i18n": ["./vendor/stubs/gi-i18n.ts"],
       "@genshin-optimizer/gi/svgicons": ["./vendor/go/gi/svgicons/src/index.ts"],
       "@genshin-optimizer/gi/uidata": ["./vendor/go/gi/uidata/src/index.ts"],
       "@genshin-optimizer/common/database": ["./vendor/go/common/database/src/index.ts"],
