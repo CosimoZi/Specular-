@@ -331,22 +331,45 @@ function SlotCard({
               </span>
             )}
           </div>
-          <div className="text-xs flex items-center gap-2" style={{ color: ELEMENT_COLOR[idx.element] }}>
-            <span>{t(`element.${idx.element}`)} · C{config?.constellation ?? 0}</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); onTogglePosition() }}
-              title={t('team.togglePositionHint')}
-              className={`text-[10px] px-1.5 py-0 rounded font-medium tabular-nums ${
-                position === 'frontline'
-                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                  : 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400'
-              }`}
-            >
-              {position === 'frontline' ? t('team.frontline') : t('team.backline')}
-            </button>
+          <div className="text-xs" style={{ color: ELEMENT_COLOR[idx.element] }}>
+            {t(`element.${idx.element}`)} · C{config?.constellation ?? 0}
           </div>
         </div>
         <button onClick={onClear} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-sm" title={t('team.clearSlot')}>✕</button>
+      </div>
+      {/* Front/back-line segmented control. Both options visible so the
+       *  toggle is discoverable; clicking the inactive option flips state. */}
+      <div className="px-3 pb-3" title={t('team.togglePositionHint')}>
+        <div className="text-[10px] uppercase tracking-wide text-zinc-400 mb-1">
+          {t('team.positionLabel')}
+        </div>
+        <div
+          role="group"
+          className="grid grid-cols-2 rounded border border-zinc-200 dark:border-zinc-800 overflow-hidden text-xs font-medium"
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); if (position !== 'frontline') onTogglePosition() }}
+            className={`py-1.5 transition-colors ${
+              position === 'frontline'
+                ? 'bg-amber-500 text-white dark:bg-amber-600'
+                : 'bg-white dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+            }`}
+            aria-pressed={position === 'frontline'}
+          >
+            {t('team.frontline')}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); if (position !== 'backline') onTogglePosition() }}
+            className={`py-1.5 transition-colors border-l border-zinc-200 dark:border-zinc-800 ${
+              position === 'backline'
+                ? 'bg-sky-500 text-white dark:bg-sky-600'
+                : 'bg-white dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+            }`}
+            aria-pressed={position === 'backline'}
+          >
+            {t('team.backline')}
+          </button>
+        </div>
       </div>
       <button
         onClick={onFocus}
