@@ -29,7 +29,7 @@ import {
   type Position,
 } from '@/engine/buff-zones'
 import { BUFFS, eligibleBuffsForTeam } from '@/data/buffs'
-import type { GoComputeResult } from '@/integration/go-calc'
+import type { GoComputeResult, SubstatMargin } from '@/integration/go-calc'
 import { ALL_SUBSTATS, MAX_ROLL_VALUES, type Substat } from '@/engine/substat'
 import { ELEMENT_COLOR } from '@/data/types'
 import { useI18n, useT } from '@/i18n/store'
@@ -145,15 +145,22 @@ export default function Team() {
   // GO Pando — compute via vendored GenshinOptimizer engine. Dynamic import
   // so the ~230 KB gzip GO chunk only loads when user visits /team.
   const [goResult, setGoResult] = useState<GoComputeResult | null>(null)
+  const [goMargins, setGoMargins] = useState<{
+    baselineFormula: string
+    baselineValue: number
+    margins: SubstatMargin[]
+  } | null>(null)
   useEffect(() => {
     if (!focusConfig) {
       setGoResult(null)
+      setGoMargins(null)
       return
     }
     let cancelled = false
-    import('@/integration/go-calc').then(({ computeViaGo }) => {
+    import('@/integration/go-calc').then(({ computeViaGo, computeSubstatMarginsViaGo }) => {
       if (cancelled) return
       setGoResult(computeViaGo(focusConfig))
+      setGoMargins(computeSubstatMarginsViaGo(focusConfig))
     })
     return () => { cancelled = true }
   }, [focusConfig])
@@ -312,6 +319,7 @@ export default function Team() {
       )}
 
       {goResult && <GoPandoPanel result={goResult} />}
+      {goMargins && <GoSubstatPanel data={goMargins} />}
 
       {!focusCharId && (
         <p className="text-sm text-zinc-500">{t('team.pickToBegin')}</p>
@@ -737,6 +745,61 @@ const PANEL_LABELS: Record<string, string> = {
   hp: 'HP', atk: 'ATK', def: 'DEF', eleMas: 'EM',
   enerRech_: 'ER', cappedCritRate_: 'CR', critDMG_: 'CD',
   dmg_: 'DMG%', heal_: 'Healing',
+}
+
+function GoSubstatPanel({ data }: {
+  data: { baselineFormula: string; baselineValue: number; margins: SubstatMargin[] }
+}) {
+  const positive = data.margins.filter((m) => m.absoluteDelta > 0)
+  const maxAbs = positive[0]?.absoluteDelta ?? 1
+  const SUBSTAT_LABEL: Record<string, string> = {
+    critRate_: 'CR (+3.89%)',
+    critDMG_: 'CD (+7.77%)',
+    atk_: 'ATK % (+5.83%)',
+    hp_: 'HP % (+5.83%)',
+    def_: 'DEF % (+7.29%)',
+    eleMas: 'EM (+23.31)',
+    enerRech_: 'ER (+6.48%)',
+    atk: 'Flat ATK (+19.45)',
+    hp: 'Flat HP (+298.75)',
+    def: 'Flat DEF (+23.15)',
+  }
+  return (
+    <section className="border border-emerald-300 dark:border-emerald-800 rounded-lg overflow-hidden">
+      <h3 className="text-sm font-semibold px-4 py-2 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-800 flex items-baseline">
+        <span>Substat marginal value (via GO Pando)</span>
+        <span className="ml-auto text-xs font-normal text-zinc-500">
+          baseline: {data.baselineFormula} = {Math.round(data.baselineValue).toLocaleString()}
+        </span>
+      </h3>
+      <table className="w-full text-sm">
+        <tbody>
+          {data.margins.map((m) => {
+            const width = m.absoluteDelta > 0 ? (m.absoluteDelta / maxAbs) * 100 : 0
+            return (
+              <tr key={m.substat} className="border-t border-emerald-100 dark:border-emerald-900/50">
+                <td className="px-4 py-2 w-44">{SUBSTAT_LABEL[m.substat] ?? m.substat}</td>
+                <td className="px-2 py-2">
+                  <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
+                    <div
+                      className={`h-full ${m.absoluteDelta > 0 ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-zinc-400'}`}
+                      style={{ width: `${width}%` }}
+                    />
+                  </div>
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums w-24">
+                  {m.absoluteDelta > 0 ? '+' : ''}{Math.round(m.absoluteDelta).toLocaleString()}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums text-zinc-500 w-20">
+                  {m.pctDelta >= 0 ? '+' : ''}{m.pctDelta.toFixed(2)}%
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </section>
+  )
 }
 
 function GoPandoPanel({ result }: { result: GoComputeResult }) {
