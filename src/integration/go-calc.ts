@@ -25,7 +25,9 @@ import {
 } from '@genshin-optimizer/gi/formula'
 import { extractCondMetadata } from '@genshin-optimizer/game-opt/formula'
 import { entries as allEntries } from '@genshin-optimizer/gi/formula'
-import { condsFor as newSheetCondsForRaw } from '@/calc/sheets'
+import { condsFor as newSheetCondsForRaw, artifactSetSheets, weaponSheets } from '@/calc/sheets'
+import { ARTIFACT_SET_NAME_ZH } from '@/calc/data/names-zh'
+import type { BuffEntry } from './buff-sources'
 
 /** Bridge from src/calc/sheets/'s CondDef → go-calc's CondInfo shape. */
 function newSheetCondsFor(sheetKey: string): CondInfo[] {
@@ -115,6 +117,15 @@ export interface FormulaResult {
   ele?: string
   /** Reaction name when move = 'reaction' (e.g. 'shattered'). */
   reaction?: string
+  /** Non-crit / crit variants for damage formulas (when set). */
+  nonCrit?: number
+  crit?: number
+  /** Per-zone breakdown for click-to-expand display. Populated by the new
+   *  pipeline (computeTeamNew via team-adapter); the legacy GO path doesn't
+   *  produce one. */
+  breakdown?: import('@/calc/formula').FormulaBreakdown
+  /** Contributors for panel-stat entries (move='panel'). */
+  contributors?: Array<{ source: string; value: number; kind: 'base' | 'pct' | 'flat' | 'pure' }>
 }
 
 export interface GoComputeResult {
@@ -166,9 +177,22 @@ export function listCondsForSheet(sheetKey: string): CondInfo[] {
   if (newConds.length > 0) return newConds
   // 2) Legacy vendor/GO registry — for characters / weapons / artifact sets
   // that haven't been ported to src/calc/ yet.
+  // EXCEPTION for artifact sets: if a set isn't in our new pipeline, its
+  // legacy conds (e.g. MaidenBeloved's `state` toggle for heal buff) won't
+  // affect damage calc — showing them in the cond panel is misleading. We
+  // explicitly hide them.
+  if (isArtifactSetKey(sheetKey)) return []
   const reg = condRegistry[sheetKey]
   if (!reg) return []
   return Object.values(reg).filter((c) => !STUB_COND_NAMES.has(c.name))
+}
+
+/** Heuristic: is this sheet key an artifact set (vs char/weapon)? Checks the
+ *  canonical ARTIFACT_SET_NAME_ZH map. Used by `listCondsForSheet` to skip
+ *  legacy-only artifact sets (which have heal/shield conds that don't affect
+ *  damage). */
+function isArtifactSetKey(sheetKey: string): boolean {
+  return sheetKey in ARTIFACT_SET_NAME_ZH
 }
 
 /** Convenience: list conds for a character by their internal id. */
@@ -176,6 +200,20 @@ export function listCondsForCharacter(characterId: number | string): CondInfo[] 
   const key = goCharacterKey(characterId)
   if (!key) return []
   return listCondsForSheet(key)
+}
+
+/** Look up the BuffEntry descriptors an artifact set declares for its
+ *  2pc / 4pc panel rows. Returns [] if the set is not modeled in src/calc/
+ *  yet, or if it has no buff descriptors. */
+export function buffsForArtifactSet(setKey: string): ReadonlyArray<BuffEntry> {
+  return artifactSetSheets[setKey]?.buffs ?? []
+}
+
+/** Look up the BuffEntry descriptors a weapon declares for its passive panel
+ *  rows. Returns [] if the weapon is not modeled in src/calc/ yet, or if it
+ *  has no buff descriptors. */
+export function buffsForWeapon(weaponKey: string): ReadonlyArray<BuffEntry> {
+  return weaponSheets[weaponKey]?.buffs ?? []
 }
 
 // =============================================================================

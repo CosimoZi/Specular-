@@ -22,6 +22,23 @@ export const CalamityQueller: WeaponSheet = {
   conds: [
     { name: 'stack', type: 'num', label: 'Consummation 层数', intOnly: true, min: 0, max: 6 },
   ],
+  buffs: [
+    {
+      source: { type: 'weapon', label: { zh: `${NAME} 被动`, en: `${NAME} passive` } },
+      name: { zh: '全元素伤害 +12~24%', en: 'All-element DMG +12-24%' },
+      effect: { zh: '所有元素伤害加成 +12/15/18/21/24%(R1-R5)。常驻。', en: 'All-elemental DMG +12/15/18/21/24% (R1-R5). Always-on.' },
+      scope: 'self',
+      sheetKey: 'CalamityQueller',
+    },
+    {
+      source: { type: 'weapon', label: { zh: `${NAME} 被动`, en: `${NAME} passive` } },
+      name: { zh: 'E 后 → 攻击力层数(后台 ×2)', en: 'After E → ATK stacks (×2 off-field)' },
+      effect: { zh: '元素战技后 20 秒内每秒获得「凶将之素」层数, +3.2/4/4.8/5.6/6.4% ATK 每层, 最多 6 层。装备者不在场时效果翻倍。', en: 'After Skill: gain Consummation stacks (1/s, 20s, max 6): +3.2/4/4.8/5.6/6.4% ATK. ×2 when off-field.' },
+      condName: 'stack',
+      scope: 'self',
+      sheetKey: 'CalamityQueller',
+    },
+  ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
     if (r < 1 || r > 5) return

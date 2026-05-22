@@ -8,7 +8,8 @@ import {
 } from '@/data'
 import type { GoComputeResult, SubstatMargin, CondInfo } from '@/integration/go-calc'
 import { wiringTierForGoKey } from '@/integration/go-coverage'
-import { goCharacterKey } from '@/integration/good-adapter'
+import { goCharacterKey, goWeaponKey, goArtifactSetKey } from '@/integration/good-adapter'
+import { listCondsForSheet, buffsForArtifactSet, buffsForWeapon } from '@/integration/go-calc'
 import {
   buffsForCharacter,
   type BuffEntry,
@@ -119,7 +120,7 @@ export default function Team() {
     ]).then(([goMod, newMod]) => {
       if (cancelled) return
       const { computeTeamViaGo, computeSubstatMarginsViaGo } = goMod
-      const { computeTeamNew, hasNewSheet } = newMod
+      const { computeTeamNew, computeSubstatMarginsNew, hasNewSheet } = newMod
       const members = team.slots.map((id) => {
         if (id == null) return null
         const cfg = configsMap[String(id)]
@@ -132,16 +133,16 @@ export default function Team() {
         slotPosition: team.slotPosition,
       }
       // Route through new pipeline for characters that have a src/calc sheet
-      // (Shenhe today). Fall back to legacy GO for everything else.
+      // (Shenhe, Linnea today). Fall back to legacy GO for everything else.
       const focusCfg = focusConfig
       if (focusCfg && hasNewSheet(focusCfg.characterId)) {
         const r = computeTeamNew(members, focusIdx, opts)
         // Adapt to GoComputeResult shape — both pipelines share the field names.
         setGoResult(r as unknown as GoComputeResult)
-        // Substat margin compute still goes through GO for now; it's mainly a
-        // ranking signal so a small numeric discrepancy is acceptable.
+        // Substat margins via new pipeline so DEF-scaling chars (Linnea, etc.)
+        // get correct rankings — GO had them as stubs returning ATK defaults.
         setGoMargins(
-          computeSubstatMarginsViaGo(members, focusIdx, {
+          computeSubstatMarginsNew(members, focusIdx, {
             ...opts,
             targetFormula: pinnedFormula ?? undefined,
           }),
@@ -241,6 +242,7 @@ export default function Team() {
         condsBySlot={condsBySlot}
         condState={team.condState}
         configsMap={configsMap}
+        focusIdx={focusIdx}
         locale={locale}
         t={t}
         onChange={(slotIdx, sheet, condName, value) => setCond(slotIdx, sheet, condName, value)}
@@ -407,12 +409,13 @@ function NumberCell({
  *  buffs may share a cond (e.g. Shenhe A1 + C2 + Q-field RES shred all
  *  fire when burstField=1) — toggling any of them syncs the others. */
 function CondSection({
-  slots, condsBySlot, condState, configsMap, locale, t, onChange,
+  slots, condsBySlot, condState, configsMap, focusIdx, locale, t, onChange,
 }: {
   slots: Array<number | string | null>
   condsBySlot: Array<CondInfo[]>
   condState: TeamConfig['condState']
   configsMap: Record<string, CharacterConfig>
+  focusIdx: number
   locale: 'zh' | 'en'
   t: (k: string, f?: string) => string
   onChange: (slotIdx: number, sheet: string, condName: string, value: number) => void
@@ -434,16 +437,87 @@ function CondSection({
           const idx = getCharacterIndex(charId)
           if (!idx) return null
           const goKey = goCharacterKey(charId)
-          const buffs = buffsForCharacter(goKey)
-          // Build a per-cond lookup so we know each cond's metadata.
-          const condByName = new Map(conds.map((c) => [c.name, c]))
+          const charBuffs = buffsForCharacter(goKey)
           const slotKey = String(slotIdx)
           const charConds = condState?.[slotKey] ?? {}
+
+          // Collect equipped weapon + artifact-set BuffEntry descriptors so
+          // they render at the TOP of this character's section (per user
+          // request: "把所有圣遗物2/4pc的效果都写在buff里。放在人物分组第一个。"
+          // and the weapon equivalent "武器特效同样处理").
+          //
+          // Weapon buffs come first (one weapon, single passive). Then
+          // artifact buffs (2pc shows when count>=2, 4pc when count>=4).
+          // Each sheet's own cond metadata is merged into setCondLookup so
+          // cond rows render via b.sheetKey instead of the character goKey.
+          //
+          // Self-scope weapon/artifact buffs are hidden when focus≠wearer
+          // (filter below) — same as character self-buffs.
+          const slotConfig = configsMap[String(charId)]
+          const equipmentBuffs: BuffEntry[] = []
+          const setCondLookup = new Map<string, CondInfo>()
+          // Weapon
+          const wepKey =
+            slotConfig?.weapon.weaponId != null ? goWeaponKey(slotConfig.weapon.weaponId) : null
+          if (wepKey) {
+            for (const b of buffsForWeapon(wepKey)) equipmentBuffs.push(b)
+            for (const c of listCondsForSheet(wepKey)) {
+              setCondLookup.set(`${wepKey}.${c.name}`, c)
+            }
+          }
+          // Artifact sets
+          const setCounts: Record<string, number> = {}
+          if (slotConfig) {
+            for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
+              const piece = slotConfig.artifacts[slot]
+              if (!piece) continue
+              const setKey = goArtifactSetKey(piece.setId)
+              if (!setKey) continue
+              setCounts[setKey] = (setCounts[setKey] ?? 0) + 1
+            }
+          }
+          for (const [setKey, count] of Object.entries(setCounts)) {
+            if (count < 2) continue
+            for (const b of buffsForArtifactSet(setKey)) {
+              if (b.source.ordinal === 4 && count < 4) continue
+              equipmentBuffs.push(b)
+            }
+            for (const c of listCondsForSheet(setKey)) {
+              setCondLookup.set(`${setKey}.${c.name}`, c)
+            }
+          }
+          // Char conds keyed by name only — char buffs without sheetKey
+          // default to the character's goKey namespace.
+          const condByName = new Map(conds.map((c) => [c.name, c]))
 
           // Group buffs by source (e.g. all 天赋2 entries together). If we
           // have no descriptor for this character, fall back to raw cond
           // input rows so the user still has some way to drive them.
-          const grouped = groupBuffsBySource(buffs)
+          // Filters:
+          //   1. Constellation entries the user hasn't unlocked yet
+          //      (a C2 character shouldn't see C4 toggles).
+          //   2. Self-scope buffs from non-focus slots — they don't affect
+          //      the focus character's calc, so showing them is misleading.
+          //      Team-scope buffs (default for un-tagged entries) stay visible.
+          const currentCons = configsMap[String(charId)]?.constellation ?? 0
+          const isFocus = slotIdx === focusIdx
+          // Final order: weapon + artifact buffs first, then character buffs.
+          const buffs: BuffEntry[] = [...equipmentBuffs, ...charBuffs]
+          const visibleBuffs = buffs.filter((b) => {
+            if (b.source.type === 'constellation' && (b.source.ordinal ?? 0) > currentCons) return false
+            if (!isFocus && b.scope === 'self') return false
+            return true
+          })
+          const grouped = groupBuffsBySource(visibleBuffs)
+          // If everything's hidden (e.g. Linnea in non-focus slot with all
+          // her own buffs scope=self) AND the EquipmentCondBlock would also
+          // be empty for non-focus context, skip the whole character section
+          // — there's nothing relevant to the focus member here.
+          if (!isFocus && grouped.length === 0 && buffs.length > 0) {
+            // Equipment buffs are currently always self-applied so don't
+            // show them for non-focus slots either.
+            return null
+          }
           return (
             <div key={slotIdx} className="px-4 py-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -476,10 +550,19 @@ function CondSection({
                       </div>
                       <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                         {group.entries.map((b, bi) => {
-                          const condMeta = b.condName ? condByName.get(b.condName) : undefined
+                          // Resolve which sheet's namespace this buff's cond
+                          // lives in: artifact-set buffs set b.sheetKey
+                          // (e.g. 'NoblesseOblige'); character buffs leave it
+                          // undefined and fall back to the character's goKey.
+                          const sheetForBuff = b.sheetKey ?? goKey
+                          const condMeta = b.condName
+                            ? (b.sheetKey
+                                ? setCondLookup.get(`${b.sheetKey}.${b.condName}`)
+                                : condByName.get(b.condName))
+                            : undefined
                           const val =
-                            b.condName && goKey
-                              ? charConds[goKey]?.[b.condName] ?? 0
+                            b.condName && sheetForBuff
+                              ? charConds[sheetForBuff]?.[b.condName] ?? 0
                               : 0
                           const sourceCfg = configsMap[String(charId)]
                           const computedValue = b.valueAt && sourceCfg ? b.valueAt(sourceCfg) : undefined
@@ -492,8 +575,8 @@ function CondSection({
                               computedValue={computedValue}
                               locale={locale}
                               onChange={(v) => {
-                                if (b.condName && goKey) {
-                                  onChange(slotIdx, goKey, b.condName, v)
+                                if (b.condName && sheetForBuff) {
+                                  onChange(slotIdx, sheetForBuff, b.condName, v)
                                 }
                               }}
                             />
@@ -504,6 +587,8 @@ function CondSection({
                   ))}
                 </div>
               )}
+              {/* Equipment buffs (weapon + artifact sets) are merged into
+                  `buffs` above and render at the top of each char's section. */}
             </div>
           )
         })}
@@ -613,11 +698,15 @@ function BuffRowStructured({
     )
   }
   if (cond.type === 'num') {
+    // Display max as the "default" when the user hasn't explicitly set the
+    // value. Buff designs assume optimal play (full stack consumption); a
+    // blank cond shouldn't read as "0 stacks → no buff" in the panel.
+    const displayed = value === 0 && cond.max != null ? cond.max : value
     return (
       <div className="px-3 py-2 flex items-start gap-3 text-sm">
         <input
           type="number"
-          value={value}
+          value={displayed}
           min={cond.min}
           max={cond.max}
           step={cond.int_only ? 1 : 0.1}
@@ -631,7 +720,7 @@ function BuffRowStructured({
           <div className="font-medium">
             {buff.name[locale]}
             {cond.min != null && cond.max != null && (
-              <span className="ml-1 text-[10px] text-zinc-400">{cond.min}–{cond.max}</span>
+              <span className="ml-1 text-[10px] text-zinc-400">{cond.min}–{cond.max}{value === 0 ? ' · 默认满' : ''}</span>
             )}
           </div>
           <div className="text-xs text-zinc-500 mt-0.5">{buff.effect[locale]}</div>
@@ -678,12 +767,21 @@ function CondInputRowRaw({
     )
   }
   if (cond.type === 'num') {
+    // Display max as the "default" when the user hasn't explicitly set the
+    // value (consistent with BuffRowStructured: buff designs assume optimal
+    // play, full stack consumption).
+    const displayed = value === 0 && cond.max != null ? cond.max : value
     return (
       <label className="flex items-center gap-2 text-sm px-2 py-1">
-        <span className="flex-1">{friendly}</span>
+        <span className="flex-1">
+          {friendly}
+          {value === 0 && cond.max != null && (
+            <span className="ml-1 text-[10px] text-zinc-400">默认满</span>
+          )}
+        </span>
         <input
           type="number"
-          value={value}
+          value={displayed}
           min={cond.min}
           max={cond.max}
           step={cond.int_only ? 1 : 0.1}
@@ -892,6 +990,88 @@ function BreakdownGroup({
   )
 }
 
+/** Click-to-expand breakdown panel for one damage formula. Lists each
+ *  multiplier zone (base / dmgBonus / critMulti / defMulti / resMulti /
+ *  elevation) with its final value, the textual formula that produced it,
+ *  and the component rows that fed into it.
+ *
+ *  Mirrors the styling of the panel-stat BreakdownTable so the UX feels
+ *  consistent across "click panel-stat" and "click damage formula". */
+function FormulaBreakdownPanel({
+  breakdown, finalValue, nonCrit, crit,
+}: {
+  breakdown: import('@/calc/formula').FormulaBreakdown
+  finalValue: number
+  nonCrit?: number
+  crit?: number
+}) {
+  const zones: Array<{ key: string; name: string; data: import('@/calc/formula').ZoneBreakdown; assemblyFmt: 'multi' | 'int' }> = [
+    { key: 'base', name: '基础区', data: breakdown.base, assemblyFmt: 'int' },
+    { key: 'dmgBonus', name: '增伤区', data: breakdown.dmgBonus, assemblyFmt: 'multi' },
+    { key: 'critMulti', name: '暴击区', data: breakdown.critMulti, assemblyFmt: 'multi' },
+    { key: 'defMulti', name: '防御区', data: breakdown.defMulti, assemblyFmt: 'multi' },
+    { key: 'resMulti', name: '抗性区', data: breakdown.resMulti, assemblyFmt: 'multi' },
+  ]
+  // Only show 擢升 if it actually contributes (moon reactions with C6 active).
+  if (breakdown.elevation.value !== 1) {
+    zones.push({ key: 'elevation', name: '擢升', data: breakdown.elevation, assemblyFmt: 'multi' })
+  }
+  return (
+    <div className="px-3 pb-2.5 pt-1.5 bg-zinc-50/60 dark:bg-zinc-900/60 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-2 text-xs">
+      {zones.map((z) => (
+        <div key={z.key}>
+          <div className="flex items-baseline gap-2">
+            <span className="font-semibold text-zinc-700 dark:text-zinc-200">{z.name}</span>
+            <span className="tabular-nums text-zinc-900 dark:text-zinc-100">
+              {z.assemblyFmt === 'int'
+                ? Math.round(z.data.value).toLocaleString()
+                : `×${z.data.value.toFixed(3)}`}
+            </span>
+            {z.data.formula && (
+              <span className="text-[10px] text-zinc-400 italic truncate">{z.data.formula}</span>
+            )}
+          </div>
+          {z.data.rows.length > 0 && (
+            <ul className="ml-3 mt-0.5 space-y-0.5">
+              {z.data.rows.map((r, i) => (
+                <li key={i} className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
+                  <span className="flex-1 truncate">{r.label}</span>
+                  <span className="tabular-nums text-zinc-700 dark:text-zinc-300">
+                    {formatBreakdownRow(r.value, r.kind)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+      <div className="pt-1.5 border-t border-zinc-200/60 dark:border-zinc-800/60 flex items-baseline gap-2">
+        <span className="font-semibold text-zinc-700 dark:text-zinc-200">期望伤害</span>
+        <span className="tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{Math.round(finalValue).toLocaleString()}</span>
+        {crit != null && nonCrit != null && (
+          <span className="text-[10px] text-zinc-500 tabular-nums ml-auto">
+            暴击 {Math.round(crit).toLocaleString()} · 未暴 {Math.round(nonCrit).toLocaleString()}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function formatBreakdownRow(value: number, kind?: 'int' | 'pct' | 'multi' | 'raw'): string {
+  switch (kind) {
+    case 'pct':
+      return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
+    case 'multi':
+      return `×${value.toFixed(3)}`
+    case 'raw':
+      return value.toFixed(3)
+    case 'int':
+    default:
+      return Math.round(value).toLocaleString()
+  }
+}
+
 // ============================================================================
 // Output panels — focus-character stats + per-talent damage + substat margins
 // ============================================================================
@@ -998,6 +1178,10 @@ function GoPandoPanel({
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(['skill', 'burst', 'reaction']),
   )
+  const [expandedFormula, setExpandedFormula] = useState<string | null>(null)
+  // Collapse any expanded formula when the focus key changes (different chars
+  // have different formula names, so a held-over expansion would be stale).
+  useEffect(() => { setExpandedFormula(null) }, [result.goKey])
   const toggleGroup = (k: string) =>
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -1095,52 +1279,81 @@ function GoPandoPanel({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-4 pb-3">
                   {list.map((f) => {
                     const isPinned = pinnedFormula === f.name
+                    const isExp = expandedFormula === f.name
                     const ele = formulaElement(f, charElement, weaponType)
+                    const ff = f as unknown as {
+                      nonCrit?: number
+                      crit?: number
+                      breakdown?: import('@/calc/formula').FormulaBreakdown
+                    }
+                    const hasBreakdown = !!ff.breakdown
                     return (
                       <div
                         key={f.name}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm bg-white dark:bg-zinc-900 border ${
+                        className={`rounded text-sm bg-white dark:bg-zinc-900 border ${
                           isPinned
                             ? 'border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400/30'
                             : 'border-zinc-200 dark:border-zinc-800'
                         }`}
                       >
-                        <button
-                          onClick={() => onPinFormula(isPinned ? null : f.name)}
-                          title={isPinned ? t('damage.unpin') : t('damage.pinForSubstat')}
-                          className={`text-xs flex-shrink-0 ${
-                            isPinned
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-                          }`}
-                        >
-                          {isPinned ? '📌' : '📍'}
-                        </button>
-                        {ele && (
-                          <span
-                            className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${ELEMENT_BADGE_CLASS[ele]}`}
-                            title={t('damage.elementBadgeHint')}
+                        <div className="flex items-center gap-2 px-2 py-1.5">
+                          <button
+                            onClick={() => onPinFormula(isPinned ? null : f.name)}
+                            title={isPinned ? t('damage.unpin') : t('damage.pinForSubstat')}
+                            className={`text-xs flex-shrink-0 ${
+                              isPinned
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                            }`}
                           >
-                            {(locale === 'en' ? ELEMENT_LABEL_EN : ELEMENT_LABEL_ZH)[ele]}
-                          </span>
-                        )}
-                        <span className="text-zinc-600 dark:text-zinc-400 truncate flex-1">{f.name}</span>
-                        <div className="text-right flex-shrink-0 leading-tight">
-                          <div className="tabular-nums font-medium">
-                            {Math.round(f.value).toLocaleString()}
-                          </div>
-                          {(() => {
-                            const ff = f as unknown as { nonCrit?: number; crit?: number }
-                            if (ff.crit == null || ff.nonCrit == null) return null
-                            return (
+                            {isPinned ? '📌' : '📍'}
+                          </button>
+                          {ele && (
+                            <span
+                              className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${ELEMENT_BADGE_CLASS[ele]}`}
+                              title={t('damage.elementBadgeHint')}
+                            >
+                              {(locale === 'en' ? ELEMENT_LABEL_EN : ELEMENT_LABEL_ZH)[ele]}
+                            </span>
+                          )}
+                          <button
+                            onClick={() =>
+                              hasBreakdown
+                                ? setExpandedFormula(isExp ? null : f.name)
+                                : undefined
+                            }
+                            disabled={!hasBreakdown}
+                            className={`flex items-center gap-1 flex-1 min-w-0 text-left ${
+                              hasBreakdown ? 'hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer' : 'cursor-default'
+                            }`}
+                            title={hasBreakdown ? '点击展开各乘区' : undefined}
+                          >
+                            <span className="text-zinc-400 text-[10px] w-3 flex-shrink-0">
+                              {hasBreakdown ? (isExp ? '▾' : '▸') : ''}
+                            </span>
+                            <span className="text-zinc-600 dark:text-zinc-400 truncate">{f.name}</span>
+                          </button>
+                          <div className="text-right flex-shrink-0 leading-tight">
+                            <div className="tabular-nums font-medium">
+                              {Math.round(f.value).toLocaleString()}
+                            </div>
+                            {ff.crit != null && ff.nonCrit != null && (
                               <div className="text-[10px] tabular-nums text-zinc-500">
                                 <span>{t('damage.crit')} {Math.round(ff.crit).toLocaleString()}</span>
                                 <span className="mx-1 text-zinc-300 dark:text-zinc-700">|</span>
                                 <span>{t('damage.nonCrit')} {Math.round(ff.nonCrit).toLocaleString()}</span>
                               </div>
-                            )
-                          })()}
+                            )}
+                          </div>
                         </div>
+                        {isExp && ff.breakdown && (
+                          <FormulaBreakdownPanel
+                            breakdown={ff.breakdown}
+                            finalValue={f.value}
+                            nonCrit={ff.nonCrit}
+                            crit={ff.crit}
+                          />
+                        )}
                       </div>
                     )
                   })}

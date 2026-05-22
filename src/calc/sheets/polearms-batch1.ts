@@ -2,9 +2,25 @@
 // Each export is a WeaponSheet registered under `weaponSheets`.
 
 import type { WeaponSheet } from '../sheet-types'
+import type { BuffEntry } from '../../integration/buff-sources'
 import { WEAPON_NAME_ZH as W } from '../data/names-zh'
 
 const ALL_ELEMENTS = ['pyro', 'hydro', 'cryo', 'electro', 'anemo', 'geo', 'dendro'] as const
+
+// Helper: compact weapon BuffEntry. Defaults: scope='self' (weapon passives
+// almost always affect only the wielder).
+const wepBuff = (
+  weaponKey: string,
+  name: { zh: string; en: string },
+  effect: { zh: string; en: string },
+  opts: { scope?: 'self' | 'team'; condName?: string } = {},
+): BuffEntry => ({
+  source: { type: 'weapon', label: { zh: `${W[weaponKey]} 被动`, en: `${weaponKey} passive` } },
+  name, effect,
+  scope: opts.scope ?? 'self',
+  condName: opts.condName,
+  sheetKey: weaponKey,
+})
 
 // =============================================================================
 // 护摩之杖 / Staff of Homa
@@ -20,6 +36,10 @@ export const StaffOfHoma: WeaponSheet = {
   key: 'StaffOfHoma',
   conds: [
     { name: 'lowHp', type: 'bool', label: 'HP < 50%(攻击力再 +1%-1.8% 生命)' },
+  ],
+  buffs: [
+    wepBuff('StaffOfHoma', { zh: 'HP +20~40%, 攻击 += HP × 0.8~1.6%', en: 'HP +20-40%, ATK += HP × 0.8-1.6%' }, { zh: '生命值上限 +20/25/30/35/40%(R1-R5); 基于装备者生命值上限的 0.8/1/1.2/1.4/1.6% 提升攻击力。', en: 'HP +20/25/30/35/40%; ATK = HP × 0.8/1/1.2/1.4/1.6%.' }),
+    wepBuff('StaffOfHoma', { zh: 'HP < 50% → 攻击再 +HP × 1~1.8%', en: 'HP < 50% → extra ATK = HP × 1-1.8%' }, { zh: 'HP < 50% 时, 攻击力再 +HP × 1/1.2/1.4/1.6/1.8%(R1-R5)。', en: 'When HP < 50%: extra ATK = HP × 1/1.2/1.4/1.6/1.8% (R1-R5).' }, { condName: 'lowHp' }),
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
@@ -63,6 +83,9 @@ export const PrimordialJadeWingedSpear: WeaponSheet = {
   conds: [
     { name: 'stacks', type: 'num', label: '穿点层数(每层 +ATK%)', intOnly: true, min: 0, max: 7 },
   ],
+  buffs: [
+    wepBuff('PrimordialJadeWingedSpear', { zh: '穿点层数 +3.2~6% ATK / 层(满层再 +12~24% 全元素+物理)', en: 'Stacks +3.2-6% ATK; max-stack +12-24% all-element/phys' }, { zh: '命中敌人后 +3.2/3.9/4.6/5.3/6% ATK 6 秒, 最多 7 层; 满层时额外 +12/15/18/21/24% 全元素与物理伤害加成。', en: 'On hit: +3.2/3.9/4.6/5.3/6% ATK/stack (max 7, 6s). At max: +12/15/18/21/24% all-elemental/physical DMG.' }, { condName: 'stacks' }),
+  ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
     const stacks = condState.PrimordialJadeWingedSpear?.stacks ?? 0
@@ -90,6 +113,9 @@ const SKYWARD_ER = [NaN, 0.08, 0.1, 0.12, 0.14, 0.16]
 export const SkywardSpine: WeaponSheet = {
   key: 'SkywardSpine',
   conds: [],
+  buffs: [
+    wepBuff('SkywardSpine', { zh: '暴击率 +8~16%, 充能 +8~16%', en: 'CR +8-16%, ER +8-16%' }, { zh: '暴击率 +8/10/12/14/16%; 元素充能效率 +8/10/12/14/16%; 普攻/重击有 50% 几率触发真空刃(本面板未建模)。', en: 'CR +8/10/12/14/16%; ER +8/10/12/14/16%; 50% chance on N/C to trigger Sky-Piercing Fang (not modeled).' }),
+  ],
   apply(scope, ctx) {
     const r = ctx.refinement
     scope.add('premod.critRate_', SKYWARD_CR[r]!, `${W.SkywardSpine} 被动 R${r}(CR)`)
@@ -110,6 +136,10 @@ export const EngulfingLightning: WeaponSheet = {
   key: 'EngulfingLightning',
   conds: [
     { name: 'afterBurst', type: 'bool', label: 'Q 后 12s(+30% ER)' },
+  ],
+  buffs: [
+    wepBuff('EngulfingLightning', { zh: 'ATK += ER × 28~56%(上限 +80~120%)', en: 'ATK += ER × 28-56% (cap +80-120%)' }, { zh: '基于元素充能效率, 攻击力 +(ER × 28/35/42/49/56%); 该效果至多使攻击力 +80/90/100/110/120%。常驻。', en: 'ATK += ER × 28/35/42/49/56%; capped at +80/90/100/110/120% ATK. Always-on.' }),
+    wepBuff('EngulfingLightning', { zh: 'Q 后 → 元素充能 +30~50%', en: 'After Q → ER +30-50%' }, { zh: '元素爆发后的 12 秒内, 元素充能效率 +30/35/40/45/50%(R1-R5)。', en: 'For 12s after Burst: ER +30/35/40/45/50% (R1-R5).' }, { condName: 'afterBurst' }),
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
@@ -145,6 +175,10 @@ export const StaffOfTheScarletSands: WeaponSheet = {
   conds: [
     { name: 'stacks', type: 'num', label: '夜分之愿层数(每层 EM → 更多 ATK)', intOnly: true, min: 0, max: 3 },
   ],
+  buffs: [
+    wepBuff('StaffOfTheScarletSands', { zh: 'ATK += EM × 52~104%', en: 'ATK += EM × 52-104%' }, { zh: '基于元素精通, 攻击力 +(EM × 52/65/78/91/104%)。常驻。', en: 'ATK += EM × 52/65/78/91/104%. Always-on.' }),
+    wepBuff('StaffOfTheScarletSands', { zh: '夜分之愿层数(每层 ATK += EM × 28~56%)', en: 'Dream stacks (each ATK += EM × 28-56%)' }, { zh: '每次施放 E 命中获得 1 层夜分之愿(10s, 最多 3 层), 每层让攻击力 +EM × 28/35/42/49/56%(R1-R5)。', en: 'On E hit: gain 1 stack (10s, max 3); each adds ATK += EM × 28/35/42/49/56% (R1-R5).' }, { condName: 'stacks' }),
+  ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
     const stacks = condState.StaffOfTheScarletSands?.stacks ?? 0
@@ -174,6 +208,9 @@ export const DragonsBane: WeaponSheet = {
   conds: [
     { name: 'enemyHydroOrPyro', type: 'bool', label: '敌人附着水/火(+伤害)' },
   ],
+  buffs: [
+    wepBuff('DragonsBane', { zh: '对水/火敌人 +伤害 20~36%', en: 'Vs hydro/pyro: DMG +20-36%' }, { zh: '对附着水或火元素的敌人造成的伤害 +20/24/28/32/36%(R1-R5)。', en: 'Vs hydro/pyro-affected enemies: DMG +20/24/28/32/36% (R1-R5).' }, { condName: 'enemyHydroOrPyro' }),
+  ],
   apply(scope, ctx, condState) {
     if (!condState.DragonsBane?.enemyHydroOrPyro) return
     const r = ctx.refinement
@@ -193,6 +230,9 @@ const WHITETASSEL_NORMAL = [NaN, 0.24, 0.3, 0.36, 0.42, 0.48]
 export const WhiteTassel: WeaponSheet = {
   key: 'WhiteTassel',
   conds: [],
+  buffs: [
+    wepBuff('WhiteTassel', { zh: '普通攻击伤害 +24~48%', en: 'Normal DMG +24-48%' }, { zh: '普通攻击造成的伤害 +24/30/36/42/48%(R1-R5)。常驻。', en: 'Normal Attack DMG +24/30/36/42/48% (R1-R5). Always-on.' }),
+  ],
   apply(scope, ctx) {
     const r = ctx.refinement
     scope.add('premod.dmg_.normal', WHITETASSEL_NORMAL[r]!, `${W.WhiteTassel} R${r}`)
@@ -209,6 +249,9 @@ export const BlackTassel: WeaponSheet = {
   key: 'BlackTassel',
   conds: [
     { name: 'enemySlime', type: 'bool', label: '敌人是史莱姆(+伤害)' },
+  ],
+  buffs: [
+    wepBuff('BlackTassel', { zh: '对史莱姆 +伤害 40~80%', en: 'Vs slimes: DMG +40-80%' }, { zh: '对史莱姆造成的伤害 +40/50/60/70/80%(R1-R5)。日常面板几乎不生效。', en: 'Vs slimes: DMG +40/50/60/70/80% (R1-R5). Rarely relevant.' }, { condName: 'enemySlime' }),
   ],
   apply(scope, ctx, condState) {
     if (!condState.BlackTassel?.enemySlime) return
@@ -231,6 +274,10 @@ export const Deathmatch: WeaponSheet = {
   key: 'Deathmatch',
   conds: [
     { name: 'solo', type: 'bool', label: '只有 1 个敌人(ATK +24-48%)' },
+  ],
+  buffs: [
+    wepBuff('Deathmatch', { zh: '多敌(≥2) → ATK +16~32%, DEF +16~32%', en: 'Multi-enemy (≥2) → ATK & DEF +16-32%' }, { zh: '周围敌人 ≥ 2 时, 攻击力 +16/20/24/28/32%, 防御力 +16/20/24/28/32%。', en: 'When 2+ enemies nearby: ATK & DEF +16/20/24/28/32%.' }),
+    wepBuff('Deathmatch', { zh: '单敌 → ATK +24~48%', en: 'Solo → ATK +24-48%' }, { zh: '周围敌人 < 2 时, 攻击力 +24/30/36/42/48%(R1-R5)。', en: 'When <2 enemies: ATK +24/30/36/42/48% (R1-R5).' }, { condName: 'solo' }),
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
@@ -255,6 +302,9 @@ export const LithicSpear: WeaponSheet = {
   conds: [
     { name: 'liyueCount', type: 'num', label: '璃月队友数量(每个 +ATK/CR)', intOnly: true, min: 0, max: 4 },
   ],
+  buffs: [
+    wepBuff('LithicSpear', { zh: '璃月队友数 → +ATK 7~11%/人, +CR 3~7%/人', en: 'Liyue teammates → ATK & CR per character' }, { zh: '队伍中每个璃月角色, +7/8/9/10/11% 攻击力与 +3/4/5/6/7% 暴击率, 最多 4 层。', en: 'Per Liyue teammate: ATK +7/8/9/10/11%, CR +3/4/5/6/7% (max 4).' }, { condName: 'liyueCount' }),
+  ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement
     const n = condState.LithicSpear?.liyueCount ?? 0
@@ -277,6 +327,10 @@ export const VortexVanquisher: WeaponSheet = {
   conds: [
     { name: 'stacks', type: 'num', label: '层数(每层 +ATK)', intOnly: true, min: 0, max: 5 },
     { name: 'shielded', type: 'bool', label: '有护盾(ATK 翻倍)' },
+  ],
+  buffs: [
+    wepBuff('VortexVanquisher', { zh: '护盾强效 +20~40%', en: 'Shield strength +20-40%' }, { zh: '护盾强效 +20/25/30/35/40%(R1-R5)。常驻。', en: 'Shield Strength +20/25/30/35/40% (R1-R5). Always-on.' }),
+    wepBuff('VortexVanquisher', { zh: '层数 → ATK +4~8%/层(有护盾翻倍)', en: 'Stacks → ATK +4-8%/stack (×2 if shielded)' }, { zh: '命中敌人后获得层数(最多 5), 每层 +4/5/6/7/8% ATK; 装备者持有护盾时该效果翻倍。', en: 'On hit: stacks (max 5), each +4/5/6/7/8% ATK; doubled while shielded.' }, { condName: 'stacks' }),
   ],
   apply(scope, ctx, condState) {
     const r = ctx.refinement

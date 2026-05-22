@@ -37,9 +37,9 @@ export const TRANSFORMATIVE_REACTION_BASE: readonly number[] = [
 export type MoonReactionType = 'crystallize' | 'electrocharged' | 'bloom'
 
 /** Per-reaction coefficient. Source: 月白姬君's formula reference.
- *  - 月结晶 (crystallize): 1.6 — Linnea
+ *  - 月结晶 (crystallize): 1.6 — Linnea / Zibai
  *  - 月感电 (electrocharged): 3 — 菲林斯 / 伊涅芙
- *  - 月绽放 (bloom): TBD — fill in when first character using it lands
+ *  - 月绽放 (bloom): 2.8 — Columbina / Lauma / Nefer (confirmed 2026-05-22)
  *
  *  This coefficient multiplies the level-base damage (for `reactionMoon`
  *  kind) OR the main-stat × multiplier expression (for `directMoon` kind).
@@ -47,5 +47,57 @@ export type MoonReactionType = 'crystallize' | 'electrocharged' | 'bloom'
 export const MOON_REACTION_COEFF: Record<MoonReactionType, number> = {
   crystallize: 1.6,
   electrocharged: 3,
-  bloom: 1.6, // placeholder; revise when a 月绽放 character is wired
+  bloom: 2.8,
+}
+
+/** Non-moon transformative reaction types. These deal pure reaction damage
+ *  (no main-stat × multiplier), can't crit, and ignore enemy DEF — only the
+ *  level-base table × reaction coefficient × (1 + EM bonus + reaction_dmg_)
+ *  × RES multiplier. Source: standard genshin damage formulas.
+ *
+ *  Note: 'electrocharged' here is the NON-moon variant (水+雷, no moon sign in
+ *  team) — distinct from MoonReactionType['electrocharged']. The formula
+ *  pipeline picks which based on FormulaKind. */
+export type TransformativeReactionType =
+  | 'overload'        // 超载 (火+雷)
+  | 'superconduct'    // 超导 (冰+雷)
+  | 'electrocharged'  // 感电 (水+雷)
+  | 'swirl'           // 扩散 (风+其他)
+  | 'shatter'         // 碎冰 (冻结+重击)
+  | 'burning'         // 燃烧 (火+草)
+
+/** Per-reaction coefficient for transformative reactions.
+ *  Source: Mihoyo's ReactionInfoExcelConfigData via community reverse-engineering.
+ *  Reference: https://genshin-impact.fandom.com/wiki/Damage_Formula */
+export const TRANSFORMATIVE_REACTION_COEFF: Record<TransformativeReactionType, number> = {
+  overload: 2.0,
+  superconduct: 0.5,
+  electrocharged: 1.2,
+  swirl: 0.6,
+  shatter: 1.5,
+  burning: 0.25,
+}
+
+/** Element each transformative reaction deals damage as. Used for resistance
+ *  lookup when the formula doesn't override. */
+export const TRANSFORMATIVE_REACTION_ELEMENT: Record<TransformativeReactionType, string> = {
+  overload: 'pyro',
+  superconduct: 'physical', // superconduct hits physical, not cryo
+  electrocharged: 'electro',
+  swirl: 'anemo',           // swirl: bonus damage is the swirled element; here we use a default 'anemo' tag
+  shatter: 'physical',
+  burning: 'pyro',
+}
+
+/** Quicken (catalyze) reactions — flat add to a direct hit. Unlike
+ *  transformative reactions, these CAN crit (they piggyback on the hit's
+ *  crit/DEF/RES). The flat is computed as:
+ *    flat = levelBase × baseCoef × (1 + 5×EM/(EM+1200) + reaction_dmg_)
+ *  Aggravate (超激化): electro direct hit on dendro-applied → +flat to electro hit.
+ *  Spread (蔓激化): dendro direct hit on electro-applied → +flat to dendro hit. */
+export type QuickenReactionType = 'aggravate' | 'spread'
+
+export const QUICKEN_REACTION_COEFF: Record<QuickenReactionType, number> = {
+  aggravate: 1.15,
+  spread: 1.25,
 }

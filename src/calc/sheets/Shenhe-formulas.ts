@@ -86,11 +86,12 @@ export function applyShenheFormulaBuffs(
   }
 }
 
-/** Q-field RES shred — to be subtracted from enemy preRes for cryo+phys. */
-export function shenheQResShred(
-  scope: Scope,
-  condState: Record<string, Record<string, number>>,
-): number {
-  if (!condState.Shenhe?.burstField) return 0
-  return skillParam.burst[1]![lvlIdx(effBurst(scope))]!
+/** Q-field RES shred — subtracts from enemy.preRes for cryo + physical.
+ *  Vendor: `teamBuff.premod.cryo_enemyRes_` and `physical_enemyRes_`
+ *  (any team member triggering damage on the enemy benefits). */
+export const shenheQResShred: import('../sheet-types').CharResShredFn = (ctx, condState) => {
+  if (!condState.Shenhe?.burstField) return {}
+  const effLvl = Math.min(15, ctx.talents.burst + (ctx.constellation >= 5 ? 3 : 0))
+  const amount = skillParam.burst[1]![lvlIdx(effLvl)]!
+  return { cryo: amount, physical: amount }
 }

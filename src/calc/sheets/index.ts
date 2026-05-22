@@ -5,7 +5,20 @@ import type { ArtifactSetSheet, CharacterSheet, WeaponSheet } from '../sheet-typ
 
 import { Shenhe } from './Shenhe'
 import { Linnea } from './Linnea'
+import { Zibai } from './Zibai'
+import { Columbina } from './Columbina'
+import { Illuga } from './Illuga'
+import { Aino } from './Aino'
+import { Flins } from './Flins'
+import { Ineffa } from './Ineffa'
+import { Jahoda } from './Jahoda'
+import { Lauma } from './Lauma'
+import { Nefer } from './Nefer'
+import { Bennett } from './Bennett'
+import { Xiangling } from './Xiangling'
+import { Xingqiu } from './Xingqiu'
 import { CalamityQueller } from './CalamityQueller'
+import { FluteOfEzpitzal } from './FluteOfEzpitzal'
 import { NoblesseOblige } from './NoblesseOblige'
 import { BlizzardStrayer } from './BlizzardStrayer'
 import { TenacityOfTheMillelith } from './TenacityOfTheMillelith'
@@ -30,6 +43,13 @@ import {
   FlowerOfParadiseLost,
   NymphsDream,
   Lavawalker,
+  AubadeOfMorningstarAndMoon,
+  SilkenMoonsSerenade,
+  NightOfTheSkysUnveiling,
+  ObsidianCodex,
+  ScrollOfTheHeroOfCinderCity,
+  LongNightsOath,
+  FinaleOfTheDeepGalleries,
 } from './artifact-sets-batch1'
 import {
   StaffOfHoma,
@@ -48,10 +68,23 @@ import {
 export const characterSheets: Record<string, CharacterSheet> = {
   Shenhe,
   Linnea,
+  Zibai,
+  Columbina,
+  Illuga,
+  Aino,
+  Flins,
+  Ineffa,
+  Jahoda,
+  Lauma,
+  Nefer,
+  Bennett,
+  Xiangling,
+  Xingqiu,
 }
 
 export const weaponSheets: Record<string, WeaponSheet> = {
   CalamityQueller,
+  FluteOfEzpitzal,
   StaffOfHoma,
   PrimordialJadeWingedSpear,
   SkywardSpine,
@@ -89,6 +122,13 @@ export const artifactSetSheets: Record<string, ArtifactSetSheet> = {
   FlowerOfParadiseLost,
   NymphsDream,
   Lavawalker,
+  AubadeOfMorningstarAndMoon,
+  SilkenMoonsSerenade,
+  NightOfTheSkysUnveiling,
+  ObsidianCodex,
+  ScrollOfTheHeroOfCinderCity,
+  LongNightsOath,
+  FinaleOfTheDeepGalleries,
 }
 
 /** UI surface — what conds does this sheet expose? */

@@ -8,10 +8,10 @@
 // sheets. Stub for now.
 
 import type { CharacterConfig } from '@/data/config-types'
-import { buildCharacter } from './build'
-import { goCharacterKey } from '@/integration/good-adapter'
+import { buildCharacter, MOONSIGN_KEYS } from './build'
+import { goCharacterKey, goArtifactSetKey } from '@/integration/good-adapter'
 import { characterSheets } from './sheets'
-import type { CondState } from './sheet-types'
+import type { CondState, TeamPanelSnapshot } from './sheet-types'
 import { charDataRaw } from './data/curves'
 
 export interface TeamMemberInput {
@@ -25,6 +25,10 @@ export interface TeamComputeOptions {
   /** Per-slot front-line override. Absent slot → default (focus = frontline,
    *  others = backline). */
   slotPosition?: Record<string, 'frontline' | 'backline'>
+  /** Substat-margin what-if injection (forwarded to buildCharacter for focus). */
+  extraSubstats?: Record<string, number>
+  /** When pinning a specific formula for substat-margin compute. */
+  targetFormula?: string
 }
 
 export interface ComputedFormula {
@@ -38,6 +42,9 @@ export interface ComputedFormula {
   /** Non-crit / crit variants for damage formulas. Undefined for panel entries. */
   nonCrit?: number
   crit?: number
+  /** Per-zone breakdown (base, dmgBonus, critMulti, etc.) for click-to-expand
+   *  display. Only populated for damage formulas (not panel entries). */
+  breakdown?: import('./formula').FormulaBreakdown
 }
 
 export interface PanelContribution {
@@ -77,9 +84,76 @@ export function computeTeamNew(
   const explicitPos = opts.slotPosition?.[String(focusSlotIdx)]
   const onField = explicitPos ? explicitPos === 'frontline' : true
 
+  // Count team elements for resonance (any 2+ same-element triggers).
+  const teamElementCount: Record<string, number> = {}
+  // Count moon-sign team members (≥2 = 月兆·满辉 state).
+  let teamMoonsignCount = 0
+  for (const m of members) {
+    if (!m) continue
+    const mGoKey = goCharacterKey(m.config.characterId)
+    if (!mGoKey) continue
+    const ele = (charDataRaw(mGoKey) as { ele?: string }).ele
+    if (ele) teamElementCount[ele] = (teamElementCount[ele] ?? 0) + 1
+    if (MOONSIGN_KEYS.has(mGoKey)) teamMoonsignCount++
+  }
+
+  // Pass 1: build each teammate's stats independently (no team buffs).
+  // Used by Phase 8.4 to compute cross-character buffs (Linnea A4, Columbina C2, etc.).
+  const teamPanels: Array<TeamPanelSnapshot | null> = members.map((m, i) => {
+    if (!m) return null
+    const mGoKey = goCharacterKey(m.config.characterId)
+    if (!mGoKey) return null
+    const mCondState = opts.condState?.[String(i)] ?? {}
+    const mPos = opts.slotPosition?.[String(i)]
+    const mOnField = mPos ? mPos === 'frontline' : i === focusSlotIdx
+    const r = buildCharacter(m.config, {
+      condState: mCondState,
+      onField: mOnField,
+      teamElementCount,
+      teamMoonsignCount,
+      // intentionally NOT passing teamPanels here — first pass excludes
+      // cross-char buffs so we get baseline stats.
+      enemy: {
+        level: opts.enemyLevel ?? 100,
+        preRes: {},
+      },
+    })
+    // Collect artifact set counts for the teammate's equipped pieces. Used
+    // for cross-char artifact buff propagation (NO 4pc, Silken Moons, etc.).
+    const tSetCounts: Record<string, number> = {}
+    for (const slot of ['flower', 'plume', 'sands', 'goblet', 'circlet'] as const) {
+      const piece = m.config.artifacts[slot]
+      if (!piece) continue
+      const setKey = goArtifactSetKey(piece.setId)
+      if (setKey) tSetCounts[setKey] = (tSetCounts[setKey] ?? 0) + 1
+    }
+    return {
+      goKey: mGoKey,
+      element: (charDataRaw(mGoKey) as { ele?: string }).ele ?? 'physical',
+      level: m.config.level,
+      ascension: m.config.ascensionStage,
+      constellation: m.config.constellation,
+      talents: m.config.talentLevels,
+      baseAtk: r.scope.get('base.atk') ?? 0,
+      baseHp: r.scope.get('base.hp') ?? 0,
+      baseDef: r.scope.get('base.def') ?? 0,
+      finalHp: r.panel.finalHp,
+      finalAtk: r.panel.finalAtk,
+      finalDef: r.panel.finalDef,
+      finalEleMas: r.panel.eleMas,
+      setCounts: tSetCounts,
+    }
+  })
+
+  // Pass 2: build focus with cross-character buffs propagated.
   const r = buildCharacter(focus.config, {
     condState: focusCondState,
     onField,
+    extraSubstats: opts.extraSubstats,
+    teamElementCount,
+    teamMoonsignCount,
+    teamPanels,
+    focusSlotIdx,
     enemy: {
       level: opts.enemyLevel ?? 100,
       preRes: { /* element-wise res defaults to opts.enemyPreRes for all */ },
@@ -94,6 +168,10 @@ export function computeTeamNew(
     const r2 = buildCharacter(focus.config, {
       condState: focusCondState,
       onField,
+      extraSubstats: opts.extraSubstats,
+      teamElementCount,
+      teamPanels,
+      focusSlotIdx,
       enemy: {
         level: opts.enemyLevel ?? 100,
         preRes: {
@@ -180,6 +258,7 @@ export function computeTeamNew(
     ele: f.element,
     nonCrit: f.nonCrit,
     crit: f.crit,
+    breakdown: f.breakdown,
   }))
 
   return {
@@ -188,5 +267,103 @@ export function computeTeamNew(
     values,
     formulas: [...panel, ...damage],
     teamKeys,
+  }
+}
+
+// =============================================================================
+// Substat margin (new pipeline)
+// =============================================================================
+
+/** Median substat roll (T1+T4)/2 — kept identical to the GO-side table in
+ *  src/integration/go-calc.ts so users see consistent margin rankings if we
+ *  flip the pipeline route. */
+const SUBSTAT_ROLL: Record<string, number> = {
+  critRate_: 0.033055,
+  critDMG_: 0.06605,
+  atk_: 0.04955,
+  hp_: 0.04955,
+  def_: 0.062,
+  eleMas: 19.815,
+  enerRech_: 0.05505,
+  atk: 16.535,
+  hp: 253.94,
+  def: 19.675,
+}
+
+export interface SubstatMargin {
+  substat: string
+  absoluteDelta: number
+  pctDelta: number
+}
+export interface SubstatMarginResult {
+  baselineFormula: string
+  baselineValue: number
+  margins: SubstatMargin[]
+}
+
+/** Pick "main damage" formula from a result's formula list — burst first,
+ *  then skill, then any positive damage formula. */
+function pickMainFormulaFromResult(r: ComputeResult): { name: string; value: number } | null {
+  // Prefer named damage moves
+  const priority = ['burst', 'skill']
+  for (const move of priority) {
+    const candidates = r.formulas.filter((f) => f.move === move && f.value > 0)
+    if (candidates.length > 0) {
+      // pick the highest-value formula in the move group
+      candidates.sort((a, b) => b.value - a.value)
+      return { name: candidates[0]!.name, value: candidates[0]!.value }
+    }
+  }
+  // Fallback: largest positive damage formula
+  let best: { name: string; value: number } | null = null
+  for (const f of r.formulas) {
+    if (f.move === 'panel') continue
+    if (f.value <= 0) continue
+    if (!best || f.value > best.value) best = { name: f.name, value: f.value }
+  }
+  return best
+}
+
+/** Compute substat margins for a focus character via the new pipeline.
+ *  Mirrors `computeSubstatMarginsViaGo` for new-sheet characters whose
+ *  scaling/buffs are properly modeled here (e.g. Linnea, where GO would
+ *  return ATK-scaling defaults instead of her actual DEF scaling). */
+export function computeSubstatMarginsNew(
+  members: Array<TeamMemberInput | null>,
+  focusSlotIdx: number,
+  opts: TeamComputeOptions = {},
+): SubstatMarginResult | null {
+  const baseline = computeTeamNew(members, focusSlotIdx, opts)
+  if (!baseline) return null
+
+  let main: { name: string; value: number } | null = null
+  if (opts.targetFormula && baseline.values[opts.targetFormula] != null) {
+    const v = baseline.values[opts.targetFormula]!
+    if (v > 0) main = { name: opts.targetFormula, value: v }
+  }
+  if (!main) main = pickMainFormulaFromResult(baseline)
+  if (!main) return null
+
+  const margins: SubstatMargin[] = []
+  for (const [substat, roll] of Object.entries(SUBSTAT_ROLL)) {
+    const perturbed = computeTeamNew(members, focusSlotIdx, {
+      ...opts,
+      extraSubstats: { ...(opts.extraSubstats ?? {}), [substat]: roll },
+    })
+    if (!perturbed) continue
+    const newVal = perturbed.values[main.name]
+    if (newVal === undefined) continue
+    const absoluteDelta = newVal - main.value
+    margins.push({
+      substat,
+      absoluteDelta,
+      pctDelta: (absoluteDelta / main.value) * 100,
+    })
+  }
+  margins.sort((a, b) => b.absoluteDelta - a.absoluteDelta)
+  return {
+    baselineFormula: main.name,
+    baselineValue: main.value,
+    margins,
   }
 }
